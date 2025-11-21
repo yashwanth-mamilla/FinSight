@@ -42,3 +42,7 @@ finsight analyze my_statements.csv
 - Notion integration for syncing
 - More bank parsers
 - Web dashboard
+
+## Acknowledgments
+
+Created with ❤️ and AI assistance from [Cline](https://github.com/cline/cline) - an intelligent coding assistant that helped build this CLI for fun and learning.
