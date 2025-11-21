@@ -18,7 +18,7 @@ dependencies = [
 ]
 readme = "README.md"
 requires-python = ">=3.8"
-scripts = {finsight = "src.finsight.cli:main"}
+scripts = {finsight = "finsight.cli:main"}
 
 [project.optional-dependencies]
 dev = ["pytest", "mypy"]
