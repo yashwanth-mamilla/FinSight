@@ -9,8 +9,7 @@ git clone https://github.com/yashwanth-mamilla/FinSight.git
 cd FinSight
 python3 -m venv .venv
 . .venv/bin/activate
-pip install click pydantic pandas openpyxl pdfplumber matplotlib [langchain-ollama]
-pip install -e .  # Install the finsight command globally
+pip install -e .  # Install dependencies and the finsight command globally
 ```
 
 ## Usage
