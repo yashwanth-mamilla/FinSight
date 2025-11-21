@@ -1,0 +1,220 @@
+from datetime import datetime
+from typing import Optional, List, Dict
+import csv
+import requests
+import json
+from pydantic import BaseModel
+from .config import MERCHANT_NAMES, CATEGORIES, LLM_ENABLE
+
+# Global list to manage persons
+class Person:
+    def __init__(self, name: str):
+        self.name = name
+        self.balance = 0.0  # To track how much they owe or are owed
+
+    def update_balance(self, amount: float):
+        self.balance += amount
+
+    def __repr__(self):
+        return f"Person(name='{self.name}', balance={self.balance})"
+
+persons: Dict[str, Person] = {}
+
+class TransactionCategory(BaseModel):
+    name: str
+    category: str
+
+def get_or_create_person(name: str) -> Person:
+    if name not in persons:
+        persons[name] = Person(name)
+    return persons[name]
+
+def clean_amount(value: str) -> float:
+    """ Cleans and converts amount strings like '79,810.33Cr' to float. """
+    value = value.replace(',', '')  # Remove thousand separators
+
+    if value.endswith("Cr"):  # Handle credit
+        value = value.replace("Cr", "").strip()
+        return -float(value)  # Keep positive
+
+    elif value.endswith("Dr"):  # Handle debit
+        value = value.replace("Dr", "").strip()
+        return float(value)  # Convert to negative
+
+    return float(value)  # Default case
+
+def parse_datetime(date_str: str, debug) -> tuple:
+    """
+    Parses date and time from a string.
+    - If "null" is present, removes it before parsing.
+    - If time is missing, defaults to '00:00:00'.
+    """
+    try:
+        date_str = date_str.lower().replace("null", "").strip()  # Remove "null" if present
+
+        if " " in date_str:  # If time is present
+            parsed_datetime = datetime.strptime(date_str, '%d/%m/%Y %H:%M:%S')
+            return parsed_datetime.date(), parsed_datetime.strftime('%H:%M:%S')
+        else:  # If only date is present
+            parsed_datetime = datetime.strptime(date_str, '%d/%m/%Y')
+            return parsed_datetime.date(), "00:00:00"  # Default time
+    except ValueError:
+        if(debug):
+            print(f"Skipping invalid date format: {date_str}")
+        return None, None  # Handle incorrect formats safely
+
+def extract_name(description: str) -> str:
+    """Extracts merchant name from transaction description."""
+    description = description.lower()  # Normalize for case-insensitive matching
+
+    for merchant, keywords in MERCHANT_NAMES.items():
+        if any(keyword in description for keyword in keywords):
+            return merchant  # Return first matching merchant name
+    
+    if LLM_ENABLE :
+        return extract_name_ai(description)
+    else :
+        return ""
+
+def extract_name_ai(description: str)-> str:
+    # Import here or in init, but for now inline
+    try:
+        from langchain_ollama import ChatOllama
+    
+        llm = ChatOllama(
+            model="llama3.2",
+            temperature=0,
+            num_predict=256,
+            # other parameters as needed
+        )
+
+        str = f'Suggest a merchant name for the expense item {description}, I see in my payments.'
+        # Define the system and human messages
+        messages = [
+            ("system", '''You are a helpful assistant. 
+                        Suggest a merchant name for the expense item <description>. 
+                        Output in json like { "name" : <merchant> }
+                        '''),
+            ("human", str),
+        ]
+
+
+        # Invoke the mod21``1234]el with structured output
+        response = llm.invoke(messages, format=TransactionCategory.model_json_schema())
+
+        print(response.content)
+        # Parse the response to extract the category
+        try:
+            response_data = TransactionCategory.model_validate_json(response.content)
+            return response_data.name
+        except Exception as e:
+            print(f"Error parsing response: {e}")
+            return TransactionCategory(name=description, category="Uncategorized")
+    except ImportError:
+        return ""
+
+def categorize_transaction(name: Optional[str], description: str) -> str:
+    
+    """ Categorizes transactions based on name (first) and description (fallback). """
+    name = name.lower() if name else None
+    description = description.lower()
+
+    # 1️⃣ Check if `name` matches any category
+    if name:
+        for category, keywords in CATEGORIES.items():
+            if any(keyword in name for keyword in keywords):
+                return category  # Return category if name matches
+
+    # 2️⃣ If no name match, check `description`
+    for category, keywords in CATEGORIES.items():
+        if any(keyword in description for keyword in keywords):
+            return category  # Return category if description matches
+
+    if LLM_ENABLE :
+        category = categorize_transaction_with_ai(name, description)
+        return category
+    else :
+        return "Uncategorized"  # Default if no match is found
+
+def categorize_transaction_with_ai(name: Optional[str], description: str) -> str:
+    try:
+        from langchain_ollama import ChatOllama
+        # Initialize the ChatOllama model
+        llm = ChatOllama(
+            model="llama3.2",
+            temperature=0,
+            num_predict=256,
+            # other parameters as needed
+        )
+
+        str = f'Suggest a category for the merchant {description} I see in my payments. Categories: [Shopping, Transport, Food and groceries, Entertainment, Utilities, Salary, Bank Fees, Healthcare, Education, Investment, Travel].'
+        # Define the system and human messages
+        messages = [
+            ("system", '''You are a helpful assistant. 
+                        Suggest a category for the merchant <merchant>. Categories: [Shopping, Transport, Food and groceries, Entertainment, Utilities, Salary, Bank Fees, Healthcare, Education, Investment, Travel].
+                        Output in json like { "name" : <merchant>, "category" : <value> }
+                        '''),
+            ("human", str),
+        ]
+
+
+        # Invoke the model with structured output
+        response = llm.invoke(messages, format=TransactionCategory.model_json_schema())
+
+        print(response.content)
+        # Parse the response to extract the category
+        try:
+            response_data = TransactionCategory.model_validate_json(response.content)
+            return response_data.category
+        except Exception as e:
+            print(f"Error parsing response: {e}")
+            return TransactionCategory(name=description, category="Uncategorized")
+    except ImportError:
+        return "Uncategorized"
+
+class ExpenseItem:
+    def __init__(
+        self,
+        date: datetime.date,
+        time: str,
+        description: str,
+        amount: float,
+        category: Optional[str] = None,
+        person_name: Optional[str] = None,
+        split_details: Optional[Dict[str, float]] = None
+    ):
+        self.date = date
+        self.time = time
+        self.description = description
+        self.name = extract_name(description)  # Extracted name from description
+        self.amount = amount
+        self.category = category if category else categorize_transaction(self.name, self.description)  # Auto-categorize
+        self.person = get_or_create_person(person_name) if person_name else None
+        self.split_details = {}
+
+        if split_details:
+            for name, amt in split_details.items():
+                self.add_split(name, amt)
+
+    def set_category(self, category: str):
+        self.category = category
+
+    def add_split(self, person_name: str, amount: float):
+        person = get_or_create_person(person_name)
+        self.split_details[person.name] = amount
+        person.update_balance(amount)
+
+    def __repr__(self):
+        return (
+            f"ExpenseItem(date={self.date}, time='{self.time}', name='{self.name}', description='{self.description}', "
+            f"amount={self.amount}, category='{self.category}', person='{self.person.name if self.person else None}', "
+            f"split_details={self.split_details})\n"
+        )
+
+class StatementParser:
+    def parse(self, data: str) -> List[ExpenseItem]:
+        """
+        Abstract method to parse raw data from different banks.
+        Should be implemented for each specific bank format.
+        """
+        raise NotImplementedError("Subclasses must implement this method")

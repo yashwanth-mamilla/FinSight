@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "finsight"
+version = "0.1.0"
+description = "CLI tool to unify and analyze bank statements"
+authors = [{name = "Your Name"}]
+dependencies = [
+    "click",
+    "pydantic",
+    "pandas",
+    "openpyxl",
+    "pdfplumber",
+    "matplotlib",
+    "langchain-ollama",
+]
+readme = "README.md"
+requires-python = ">=3.8"
+scripts = {finsight = "src.finsight.cli:main"}
+
+[project.optional-dependencies]
+dev = ["pytest", "mypy"]
+notion = ["notion-client"]  # for future sync
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
