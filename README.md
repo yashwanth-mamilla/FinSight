@@ -37,12 +37,32 @@ finsight analyze my_statements.csv
 - SBI Bank CSV
 - Excel support planned
 
+## Gmail Integration (Auto-download Statements)
+
+FinSight can automatically download bank statement attachments from your Gmail:
+
+### Gmail Setup:
+1. **Get Gmail API credentials:**
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Create project → Enable Gmail API
+   - Create OAuth 2.0 client ID (Desktop application)
+   - Download `client_secret_*.json` → rename to `credentials.json` in project root
+
+2. **Configure search queries:**
+   - Edit `config/gmail_config.yaml` with your bank email patterns
+
+3. **Authenticate & Sync:**
+   ```bash
+   # Setup OAuth (first time only)
+   finsight sync-gmail --setup-oauth
+   
+   # Download recent statements
+   finsight sync-gmail --since-days 7
+   ```
+
+Downloads are saved to `statements/` directory, ready for parsing with `finsight parse`.
+
 ## Future Features
 
 - Notion integration for syncing
 - More bank parsers
-- Web dashboard
-
-## Acknowledgments
-
-Created with ❤️ and AI assistance from [Cline](https://github.com/cline/cline) - an intelligent coding assistant that helped build this CLI for fun and learning.

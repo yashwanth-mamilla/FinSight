@@ -24,6 +24,11 @@ wheels/
 .venv/
 .env
 
+# Gmail API credentials and data
+credentials.json
+token.json
+.processed_emails.txt
+
 # Data files
 *.csv
 *.xlsx

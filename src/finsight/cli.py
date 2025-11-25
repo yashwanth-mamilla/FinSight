@@ -4,6 +4,11 @@ from pathlib import Path
 from .parsers import hdfc_cred_bill, HDFCStatementParser, SBIStatementParser
 from .utils import write_expenses_convert, analyze_spending, load_expenses_from_csv
 
+try:
+    from .gmail_sync import sync_gmail as gmail_sync_command
+except ImportError:
+    gmail_sync_command = None
+
 @click.group()
 def cli():
     pass
@@ -62,6 +67,38 @@ def analyze(csv_file, no_plots):
     else:
         analyze_spending(expenses)
     click.echo("Analysis complete.")
+
+@cli.command()
+@click.option('--config', default='config/gmail_config.yaml', help='Path to Gmail config file')
+@click.option('--since-days', default=7, help='Search emails from last N days')
+@click.option('--setup-oauth', is_flag=True, help='Setup OAuth2 credentials')
+def sync_gmail(config: str, since_days: int, setup_oauth: bool):
+    """Download bank statement attachments from Gmail."""
+    if gmail_sync_command is None:
+        click.echo("Error: Gmail sync dependencies not installed. Install with: pip install google-api-python-client google-auth")
+        return
+
+    if setup_oauth:
+        # Run the OAuth setup guide
+        import io
+        from contextlib import redirect_stdout
+        from .gmail_sync import install_oauth
+        install_oauth()
+        return
+
+    if not Path('credentials.json').exists():
+        click.echo("Error: credentials.json not found. Run 'finsight sync-gmail --setup-oauth' first.")
+        return
+
+    try:
+        from .gmail_sync import GmailSync
+        syncer = GmailSync(config)
+        downloaded = syncer.sync_statements(since_days)
+        click.echo(f"Downloaded {len(downloaded)} statement files to '{syncer.download_dir}':")
+        for file in downloaded:
+            click.echo(f"  {file}")
+    except Exception as e:
+        click.echo(f"Sync failed: {e}")
 
 def main():
     cli()
