@@ -1,7 +1,6 @@
 import click
 from pathlib import Path
 import yaml
-from typing import Dict, List
 
 from .parsers import hdfc_cred_bill, amazon_pay_statement, HDFCStatementParser, SBIStatementParser
 from .utils import write_expenses_convert, analyze_spending, load_expenses_from_csv
