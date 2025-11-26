@@ -4,6 +4,7 @@ import yaml
 
 from .parsers import hdfc_cred_bill, amazon_pay_statement, HDFCStatementParser, SBIStatementParser
 from .utils import write_expenses_convert, analyze_spending, load_expenses_from_csv
+from .database import get_database
 
 try:
     from .gmail_sync import sync_gmail as gmail_sync_command
@@ -90,8 +91,9 @@ def format_bank_help():
 @click.argument("file_path", type=click.Path(exists=True, dir_okay=False))
 @click.option("--bank", default="auto", help=f"Bank type: {format_bank_help()}")
 @click.option("--output", default="unified.csv", help="Output CSV file")
+@click.option("--db", is_flag=True, help="Store transactions in database")
 @click.option("--password", default=None, help="Password for encrypted PDF files")
-def parse(file_path, bank, output, password):
+def parse(file_path, bank, output, db, password):
     file_path = Path(file_path)
     expenses = []
 
@@ -135,7 +137,14 @@ def parse(file_path, bank, output, password):
     if not expenses:
         click.echo("No transactions parsed.")
         return
-    
+
+    # Store to database if requested
+    if db:
+        db_instance = get_database()
+        stored_count = db_instance.store_transactions(expenses, bank, str(file_path))
+        click.echo(f"Stored {stored_count} transactions in database")
+
+    # Always save to CSV as well
     output_path = write_expenses_convert(expenses, output)
     click.echo(f"Parsed {len(expenses)} transactions to {output_path}")
 
@@ -151,6 +160,90 @@ def analyze(csv_file, no_plots):
     else:
         analyze_spending(expenses)
     click.echo("Analysis complete.")
+
+@click.group()
+def db():
+    """Database operations for FinSight."""
+    pass
+
+cli.add_command(db)
+
+@db.command('query')
+@click.option('--bank', default=None, help='Filter by bank name (e.g., hdfc-cred)')
+@click.option('--from-date', default=None, help='Start date (YYYY-MM-DD)')
+@click.option('--to-date', default=None, help='End date (YYYY-MM-DD)')
+@click.option('--category', default=None, help='Filter by category')
+@click.option('--limit', default=50, type=int, help='Max results to return')
+@click.option('--json', is_flag=True, help='Output as JSON')
+def db_query(bank, from_date, to_date, category, limit, json):
+    """Query transactions from database."""
+    db_instance = get_database()
+
+    filters = {}
+    if bank:
+        filters['bank_name'] = bank
+    if from_date:
+        filters['date_from'] = from_date
+    if to_date:
+        filters['date_to'] = to_date
+    if category and category != 'all':
+        filters['category'] = category
+
+    transactions = db_instance.query_transactions(filters=filters, limit=limit)
+
+    if json:
+        import json
+        click.echo(json.dumps(transactions, indent=2, default=str))
+    else:
+        if not transactions:
+            click.echo("No transactions found matching criteria.")
+            return
+
+        click.echo(f"Found {len(transactions)} transactions:")
+        for txn in transactions[:10]:  # Show first 10
+            click.echo(f"  {txn['date']} | {txn['bank_name']} | {txn['description']} | ₹{txn['amount']}")
+
+        if len(transactions) > 10:
+            click.echo(f"  ... and {len(transactions) - 10} more")
+
+@db.command('analyze')
+@click.option('--bank', default=None, help='Analyze specific bank')
+@click.option('--months', default=3, type=int, help='Months to analyze')
+def db_analyze(bank, months):
+    """Analyze spending patterns from database."""
+    db_instance = get_database()
+    stats = db_instance.get_spending_summary(bank_name=bank, months=months)
+
+    if stats['total_transactions'] == 0:
+        click.echo("No transaction data available for analysis.")
+        return
+
+    click.echo(f"📊 Database Analytics ({'All Banks' if not bank else f'{bank}'}) - Last {months} Months:")
+    click.echo(f"📈 Total Transactions: {stats['total_transactions']}")
+    click.echo(f"💰 Total Amount: ₹{stats['total_amount']:.2f}")
+    click.echo(f"📊 Average Transaction: ₹{stats['average_transaction']:.2f}")
+
+    if stats['top_categories']:
+        click.echo("\n🏷️  Top Spending Categories:")
+        for cat in stats['top_categories'][:5]:
+            click.echo(f"  • {cat['category']}: ₹{abs(cat['total']):.2f} ({cat['count']} transactions)")
+
+@db.command('stats')
+def db_stats():
+    """Show database statistics."""
+    db_instance = get_database()
+    stats = db_instance.get_db_stats()
+
+    click.echo("📊 FinSight Database Statistics:")
+    click.echo(f"📅 Date Range: {stats['date_range']['from']} to {stats['date_range']['to']}")
+
+    if stats['banks']:
+        click.echo(f"\n🏦 Bank Breakdown ({len(stats['banks'])} banks):")
+        for bank in stats['banks']:
+            click.echo(f"  • {bank['bank']}: {bank['transactions']} transactions, ₹{bank['total_amount']:.2f}")
+    else:
+        click.echo("📝 No transaction data in database yet.")
+        click.echo("💡 Use 'finsight parse <file.pdf> --bank <type> --db' to import transactions.")
 
 @cli.command()
 @click.option('--config', default='config/gmail_config.yaml', help='Path to Gmail config file')
