@@ -387,7 +387,7 @@ def _sync_gmail_account(account_email: str, bank_filters: List[str], since_days:
     try:
         # Get credentials for this specific account with verification
         multi_gmail = MultiAccountGmail()
-        credentials = multi_gmail.get_credentials_for_account(account_email)
+        credentials = multi_gmail.get_credentials_for_account(account_email, force_verify=True)
 
         # Create GmailSync with verified credentials
         class BankSpecificGmailSync(GmailSync):

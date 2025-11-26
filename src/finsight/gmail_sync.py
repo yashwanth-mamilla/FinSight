@@ -263,10 +263,11 @@ class MultiAccountGmail:
         token_filename = account_config.get('token_file', f"token_{email.split('@')[0]}.json")
         return str(self.tokens_dir / token_filename)
 
-    def get_credentials_for_account(self, account_email: str) -> Credentials:
+    def get_credentials_for_account(self, account_email: str, force_verify: bool = False) -> Credentials:
         """
         Get OAuth2 credentials for a specific Gmail account.
         Handles token file storage per account with verification.
+        Always verifies tokens to prevent account mixups.
         """
         token_file = self.get_token_file_for_account(account_email)
         credentials_file = self.get_credentials_file_for_account(account_email)
@@ -279,30 +280,58 @@ class MultiAccountGmail:
 
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
-                click.echo(f"🔐 OAuth Setup for: {account_email}")
-                click.echo(f"📧 Browser will open - SELECT: {account_email}")
-
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    credentials_file, SCOPES)
-                creds = flow.run_local_server(port=0)
-
-                # Verify the account immediately after authorization
+                # Token expired, refresh it
                 try:
-                    verified_email = verify_gmail_account(creds, expected_email=account_email)
-                    click.echo(f"✅ Account verified: {verified_email}")
-                except ValueError as e:
-                    # Delete the invalid token file
+                    creds.refresh(Request())
+                    click.echo(f"🔄 Token refreshed for {account_email}")
+                except Exception as e:
+                    click.echo(f"❌ Token refresh failed for {account_email}: {e}")
+                    # Delete the invalid/unrefreshable token
                     if os.path.exists(token_file):
                         os.remove(token_file)
-                        click.echo(f"🗑️  Deleted invalid token file: {token_file}")
-                    raise e
+                        click.echo(f"🗑️  Deleted unrefreshable token: {token_file}")
+                    creds = None  # Force fresh OAuth flow
+            else:
+                creds = None  # Need new OAuth flow
 
-            # Save the credentials for this account
+        # If we don't have valid creds, do OAuth flow
+        if not creds or not creds.valid:
+            click.echo(f"🔐 OAuth Setup for: {account_email}")
+            click.echo(f"📧 Browser will open - SELECT: {account_email}")
+
+            flow = InstalledAppFlow.from_client_secrets_file(
+                credentials_file, SCOPES)
+            creds = flow.run_local_server(port=0)
+
+            # Verify the account immediately after authorization
+            try:
+                verified_email = verify_gmail_account(creds, expected_email=account_email)
+                click.echo(f"✅ Account verified: {verified_email}")
+            except ValueError as e:
+                # Delete the invalid token file
+                if os.path.exists(token_file):
+                    os.remove(token_file)
+                    click.echo(f"🗑️  Deleted invalid token file: {token_file}")
+                raise e
+
+            # Save the verified credentials for this account
             with open(token_file, 'w') as f:
                 f.write(creds.to_json())
             click.echo(f"💾 Token saved: {token_file}")
+        else:
+            # We have valid existing creds, but let's verify them anyway if requested or periodically
+            if force_verify:
+                try:
+                    verified_email = verify_gmail_account(creds, expected_email=account_email)
+                    click.echo(f"✅ Existing token verified: {verified_email}")
+                except ValueError as e:
+                    click.echo(f"🚨 EXISTING TOKEN VERIFICATION FAILED!")
+                    click.echo(f"   This token appears to be for a different account.")
+                    # Delete the bundled token file
+                    if os.path.exists(token_file):
+                        os.remove(token_file)
+                        click.echo(f"🗑️  Deleted mismatched token file: {token_file}")
+                    raise e
 
         return creds
 
