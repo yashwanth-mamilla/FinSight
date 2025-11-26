@@ -4,7 +4,7 @@
 gmail_accounts:
   # Configure each Gmail account used for bank statement sync
   yashwanth.sunny8047@gmail.com:
-    credentials_file: credentials_yashwanth.json
+    credentials_file: credentials.json
     token_file: token_yashwanth.json
 
   # Legacy account for reference (not used currently)
