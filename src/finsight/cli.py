@@ -248,34 +248,234 @@ def db_stats():
 @cli.command()
 @click.option('--config', default='config/gmail_config.yaml', help='Path to Gmail config file')
 @click.option('--since-days', default=7, help='Search emails from last N days')
-@click.option('--setup-oauth', is_flag=True, help='Setup OAuth2 credentials')
-def sync_gmail(config: str, since_days: int, setup_oauth: bool):
-    """Download bank statement attachments from Gmail."""
-    if gmail_sync_command is None:
-        click.echo("Error: Gmail sync dependencies not installed. Install with: pip install google-api-python-client google-auth")
-        return
+@click.option('--account', default=None, help='Specific Gmail account email (e.g., personal@gmail.com)')
+@click.option('--banks', default=None, help='Comma-separated list of banks to sync (e.g., hdfc-cred,sbi)')
+@click.option('--setup-oauth', is_flag=True, help='Setup OAuth2 for multi-account Gmail')
+@click.option('--list-accounts', is_flag=True, help='List configured Gmail accounts')
+def sync_gmail(config: str, since_days: int, account: str, banks: str, setup_oauth: bool, list_accounts: bool):
+    """Download bank statement attachments from Gmail with multi-account support."""
 
     if setup_oauth:
-        # Run the OAuth setup guide
-        import io
-        from contextlib import redirect_stdout
         from .gmail_sync import install_oauth
         install_oauth()
+        click.echo("\nMulti-account setup guide:")
+        click.echo("1. For each email account, get OAuth credentials from Google Cloud Console")
+        click.echo("2. Save as: credentials_{account}.json (e.g., credentials_personal.json)")
+        click.echo("3. First run per account will create token_{account}.json")
+        click.echo("4. Update config/gmail_config.yaml with your account details")
         return
 
-    if not Path('credentials.json').exists():
-        click.echo("Error: credentials.json not found. Run 'finsight sync-gmail --setup-oauth' first.")
+    if list_accounts:
+        try:
+            gmail_config = yaml.safe_load(open(config)) if Path(config).exists() else {}
+            accounts = gmail_config.get('gmail_accounts', {})
+            click.echo("Configured Gmail accounts:")
+            for email in accounts.keys():
+                click.echo(f"  - {email}")
+        except Exception as e:
+            click.echo(f"Error reading config: {e}")
         return
 
-    try:
-        from .gmail_sync import GmailSync
-        syncer = GmailSync(config)
-        downloaded = syncer.sync_statements(since_days)
-        click.echo(f"Downloaded {len(downloaded)} statement files to '{syncer.download_dir}':")
-        for file in downloaded:
-            click.echo(f"  {file}")
-    except Exception as e:
-        click.echo(f"Sync failed: {e}")
+    # Validate CLI parameters
+    if account and banks:
+        click.echo("Error: Use either --account OR --banks, not both.")
+        click.echo("  --account: Sync all banks for specified email account")
+        click.echo("  --banks: Sync specified banks from their configured accounts")
+        return
+
+    if account or banks:
+        # Multi-account/sync implementation
+        try:
+            accounts_to_sync = _resolve_gmail_accounts(account, banks)
+            total_downloaded = 0
+
+            for gmail_account, account_banks in accounts_to_sync.items():
+                click.echo(f"\n🔄 Syncing {gmail_account}...")
+                click.echo(f"   Banks: {', '.join(account_banks) if account_banks else 'all'}")
+
+                try:
+                    downloaded = _sync_gmail_account(gmail_account, account_banks, since_days)
+                    total_downloaded += len(downloaded)
+                    click.echo(f"   📥 Downloaded {len(downloaded)} files")
+                except Exception as e:
+                    click.echo(f"   ❌ Failed: {e}")
+
+            click.echo(f"\n✅ Total files downloaded: {total_downloaded}")
+
+        except Exception as e:
+            click.echo(f"Gmail sync error: {e}")
+    else:
+        # Legacy single-account (backward compatibility)
+        click.echo("Warning: No --account or --banks specified.")
+        click.echo("Using legacy single-account mode (requires credentials.json).")
+        if not Path('credentials.json').exists():
+            click.echo("Error: credentials.json not found. Use --setup-oauth or specify --account")
+            return
+
+        try:
+            from .gmail_sync import GmailSync
+            syncer = GmailSync(config)
+            downloaded = syncer.sync_statements(since_days)
+            click.echo(f"Downloaded {len(downloaded)} files in legacy mode")
+        except Exception as e:
+            click.echo(f"Sync failed: {e}")
+
+
+def _resolve_gmail_accounts(account_email: str = None, banks_list: str = None) -> Dict[str, List[str]]:
+    """Resolve which Gmail accounts and banks to sync."""
+
+    # Load bank configurations
+    banks_config = load_banks_config()
+    all_banks = banks_config.get('banks', {})
+
+    result = {}
+
+    if account_email:
+        # Account-by-account approach: find all banks for this account
+        result[account_email] = []
+        for bank_key, bank_info in all_banks.items():
+            if bank_info.get('gmail_account') == account_email:
+                cli_id = bank_info.get('cli_identifier', bank_key)
+                result[account_email].append(cli_id)
+
+        if not result[account_email]:
+            raise ValueError(f"No banks configured for account: {account_email}")
+
+    elif banks_list:
+        # Bank-by-bank approach: group banks by their Gmail account
+        bank_names = [b.strip() for b in banks_list.split(',') if b.strip()]
+
+        for bank_name in bank_names:
+            # Find the bank in config
+            bank_config = None
+            for bank_key, bank_info in all_banks.items():
+                if bank_info.get('cli_identifier') == bank_name:
+                    bank_config = bank_info
+                    break
+
+            if not bank_config:
+                raise ValueError(f"Bank not configured: {bank_name}")
+
+            gmail_account = bank_config.get('gmail_account')
+            if not gmail_account:
+                raise ValueError(f"No Gmail account configured for bank: {bank_name}")
+
+            if gmail_account not in result:
+                result[gmail_account] = []
+            result[gmail_account].append(bank_name)
+
+    return result
+
+
+def _sync_gmail_account(account_email: str, bank_filters: List[str], since_days: int) -> List[str]:
+    """Sync a single Gmail account for specific banks."""
+
+    # Load Gmail config
+    gmail_config_path = 'config/gmail_config.yaml'
+    gmail_config = yaml.safe_load(open(gmail_config_path)) if Path(gmail_config_path).exists() else {}
+    account_config = gmail_config.get('gmail_accounts', {}).get(account_email)
+
+    if not account_config:
+        raise ValueError(f"Account not configured: {account_email}")
+
+    # Load bank configs to get bank-specific Gmail settings
+    banks_config = load_banks_config()
+    all_banks = banks_config.get('banks', {})
+
+    # Create GmailSync with account-specific credentials
+    from .gmail_sync import GmailSync
+
+    class BankGmailSync(GmailSync):
+        # Custom version that uses bank filters and bank-specific query patterns
+
+        def sync_statements(self, since_days: int = 7) -> List[str]:
+            """Override to use bank-specific queries instead of legacy ones."""
+            downloaded_files = []
+            processed_message_ids = self.get_processed_message_ids()
+
+            since_date = (datetime.datetime.now() - datetime.timedelta(days=since_days)).strftime('%Y/%m/%d')
+            base_query = f"after:{since_date}"
+
+            # Get account-specific queries from bank configurations
+            account_banks = self.banks_filter or []
+            queries_to_run = []
+
+            if account_banks:
+                # Bank-specific mode
+                for bank_name in account_banks:
+                    # Find bank config
+                    bank_config = None
+                    for bank_key, bank_info in all_banks.items():
+                        if bank_info.get('cli_identifier') == bank_name:
+                            bank_config = bank_info
+                            break
+
+                    if bank_config:
+                        subjects = bank_config.get('gmail_subjects', [])
+                        attachments = bank_config.get('gmail_attachments', [])
+
+                        for subject in subjects:
+                            queries_to_run.append({
+                                'subject': subject.replace('subject:(', '').replace(')', ''),
+                                'attachment': attachments[0] if attachments else '*.pdf'
+                            })
+            else:
+                # Account-wide mode - get queries from all banks for this account
+                for bank_key, bank_info in all_banks.items():
+                    if bank_info.get('gmail_account') == account_email:
+                        subjects = bank_info.get('gmail_subjects', [])
+                        attachments = bank_info.get('gmail_attachments', [])
+
+                        for subject in subjects:
+                            queries_to_run.append({
+                                'subject': subject.replace('subject:(', '').replace(')', ''),
+                                'attachment': attachments[0] if attachments else '*.pdf'
+                            })
+
+            # Remove duplicates
+            seen = set()
+            unique_queries = []
+            for q in queries_to_run:
+                key = (q['subject'], q['attachment'])
+                if key not in seen:
+                    seen.add(key)
+                    unique_queries.append(q)
+
+            # Process queries
+            for query_config in unique_queries:
+                subject_pattern = query_config.get('subject', '')
+                attachment_pattern = query_config.get('attachment', '*.pdf')
+
+                query = f"{base_query} {subject_pattern}"
+
+                click.echo(f"    Searching: {query}")
+
+                messages = self.search_emails(query)
+                for message in messages:
+                    if message['id'] in processed_message_ids:
+                        continue
+
+                    attachments = self.get_message_attachments(message['id'])
+                    for attachment in attachments:
+                        filename = attachment['filename']
+                        if self.matches_attachment_pattern(filename, attachment_pattern):
+                            file_path = self.download_attachment(
+                                message['id'], attachment['attachment_id'], filename
+                            )
+                            if file_path:
+                                downloaded_files.append(file_path)
+                                self.mark_message_processed(message['id'])
+
+            return downloaded_files
+
+    # Create and run syncer
+    syncer = BankGmailSync(
+        config_path=gmail_config_path,
+        account_email=account_email,
+        banks_filter=bank_filters
+    )
+
+    return syncer.sync_statements(since_days)
 
 def main():
     cli()
