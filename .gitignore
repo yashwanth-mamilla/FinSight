@@ -29,8 +29,12 @@ credentials.json
 token.json
 .processed_emails.txt
 
+# PDF passwords (sensitive)
+config/passwords.yaml
+
 # Data files
 *.csv
 *.xlsx
 
-# IDE
+# Downloaded bank statements (sensitive financial data)
+statements/

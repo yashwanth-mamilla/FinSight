@@ -13,16 +13,60 @@ except ImportError:
 def cli():
     pass
 
+def get_pdf_password(file_path: str) -> str:
+    """Get PDF password from config file if available."""
+    import yaml
+    from pathlib import Path
+
+    # Try to find password based on filename or bank name
+    config_path = Path('config/passwords.yaml')
+
+    if config_path.exists():
+        try:
+            with open(config_path, 'r') as f:
+                config = yaml.safe_load(f)
+
+            # Look for passwords in the config
+            passwords = config.get('passwords', {})
+
+            # Try filename as key
+            filename = Path(file_path).stem
+            if filename in passwords:
+                return passwords[filename]
+
+            # Try bank name detection
+            filename_lower = filename.lower()
+            for key, password in passwords.items():
+                if key.lower() in filename_lower:
+                    return password
+
+            # Default password for common patterns
+            for key, password in passwords.items():
+                if filename_lower.count(key.lower()) > 0:
+                    return password
+
+        except Exception:
+            pass  # Ignore errors, just continue without password
+
+    return None
+
 @cli.command()
 @click.argument("file_path", type=click.Path(exists=True, dir_okay=False))
 @click.option("--bank", default="auto", help="Bank type: hdfc-cred, hdfc-bank, sbi, auto")
 @click.option("--output", default="unified.csv", help="Output CSV file")
-def parse(file_path, bank, output):
+@click.option("--password", default=None, help="Password for encrypted PDF files")
+def parse(file_path, bank, output, password):
     file_path = Path(file_path)
     expenses = []
+
+    # Get password from config if PDF
+    pdf_password = password
+    if not pdf_password and file_path.suffix.lower() == ".pdf":
+        pdf_password = get_pdf_password(str(file_path))
+
     if bank == "hdfc-cred" and file_path.suffix.lower() == ".pdf":
         click.echo("Parsing HDFC Credit Card PDF...")
-        expenses = hdfc_cred_bill(str(file_path))
+        expenses = hdfc_cred_bill(str(file_path), pdf_password)
     elif bank in ["hdfc-bank", "hdfcbank"] or bank == "auto":
         if bank == "auto":
             # Simple auto-detect by extension

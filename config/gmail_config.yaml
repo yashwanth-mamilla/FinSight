@@ -25,7 +25,7 @@ gmail:
       attachment: "*.pdf"
     
     # Amazon Pay Statements
-    - subject: "subject:(Amazon Pay Statement OR Amazon Pay Transaction Report)"
+    - subject: "subject:(Amazon Pay ICICI Bank Credit Card Statement)"
       attachment: "*.pdf"
     
     # Kotak Mahindra Bank Statements

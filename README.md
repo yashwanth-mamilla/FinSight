@@ -23,6 +23,15 @@ finsight --help
 Parse a bank statement:
 ```bash
 finsight parse /path/to/statement.pdf --bank hdfc-cred --output my_statements.csv
+# For password-protected PDFs:
+finsight parse statement.pdf --bank hdfc-cred --password "mypass123" --output my_statements.csv
+```
+
+Configure PDF passwords in `config/passwords.yaml` for automatic detection:
+```yaml
+passwords:
+  amazon_pay: "myamazonpass"
+  hdfc_card: "mycardpass"
 ```
 
 Analyze spending:

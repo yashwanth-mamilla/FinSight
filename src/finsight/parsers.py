@@ -6,10 +6,10 @@ import pdfplumber
 from .models import ExpenseItem, clean_amount, parse_datetime
 
 # Moved from a.py
-def hdfc_cred_bill(pdf_path: str) -> List[ExpenseItem]:
+def hdfc_cred_bill(pdf_path: str, password: str = None) -> List[ExpenseItem]:
     transactions = []
 
-    with pdfplumber.open(pdf_path) as pdf:
+    with pdfplumber.open(pdf_path, password=password) as pdf:
         for page in pdf.pages:
             table = page.extract_table()
             if table:
