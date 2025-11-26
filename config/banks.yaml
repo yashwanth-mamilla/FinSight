@@ -35,6 +35,17 @@ banks:
       - "state_bank"
     description: "SBI account CSV statements"
 
+  amazon_pay:
+    name: "Amazon Pay"
+    cli_identifier: "amazon-pay"
+    formats: ["pdf"]
+    parser_class: "AmazonPayParser"
+    password_identifiers:
+      - "amazon_pay"
+      - "amazon"
+      - "retail_amazon"
+    description: "Amazon Pay transaction statements"
+
 # Password matching rules
 # The system tries passwords in this order:
 # 1. Exact filename match: Use PDF filename as key in passwords.yaml
@@ -47,3 +58,4 @@ supported_bank_identifiers:
   - "hdfc-cred"
   - "hdfc-bank"
   - "sbi"
+  - "amazon-pay"

@@ -2,7 +2,7 @@ import click
 from pathlib import Path
 import yaml
 
-from .parsers import hdfc_cred_bill, HDFCStatementParser, SBIStatementParser
+from .parsers import hdfc_cred_bill, amazon_pay_statement, HDFCStatementParser, SBIStatementParser
 from .utils import write_expenses_convert, analyze_spending, load_expenses_from_csv
 
 try:
@@ -30,40 +30,44 @@ bank_details = banks_config.get('banks', {})
 def cli():
     pass
 
-def get_pdf_password(file_path: str) -> str:
-    """Get PDF password from config file if available."""
+def get_pdf_password(file_path: str, bank_cli_id: str = None) -> str:
+    """Get PDF password from config file using bank identifiers and filename."""
     import yaml
     from pathlib import Path
 
-    # Try to find password based on filename or bank name
+    # Load passwords config
     config_path = Path('config/passwords.yaml')
+    if not config_path.exists():
+        return None
 
-    if config_path.exists():
-        try:
-            with open(config_path, 'r') as f:
-                config = yaml.safe_load(f)
+    try:
+        with open(config_path, 'r') as f:
+            password_config = yaml.safe_load(f)
+        passwords = password_config.get('passwords', {})
 
-            # Look for passwords in the config
-            passwords = config.get('passwords', {})
+        # Always try filename as key first (most specific)
+        filename = Path(file_path).stem
+        if filename in passwords:
+            return passwords[filename]
 
-            # Try filename as key
-            filename = Path(file_path).stem
-            if filename in passwords:
-                return passwords[filename]
+        # If bank CLI ID provided, use its password identifiers
+        if bank_cli_id and bank_details:
+            for bank_key, details in bank_details.items():
+                if details.get('cli_identifier') == bank_cli_id:
+                    password_keys = details.get('password_identifiers', [])
+                    for key in password_keys:
+                        if key in passwords:
+                            return passwords[key]
+                    break
 
-            # Try bank name detection
-            filename_lower = filename.lower()
-            for key, password in passwords.items():
-                if key.lower() in filename_lower:
-                    return password
+        # Fallback: look for any matching key in passwords
+        filename_lower = filename.lower()
+        for key, password in passwords.items():
+            if key.lower() in filename_lower or filename_lower.count(key.lower()) > 0:
+                return password
 
-            # Default password for common patterns
-            for key, password in passwords.items():
-                if filename_lower.count(key.lower()) > 0:
-                    return password
-
-        except Exception:
-            pass  # Ignore errors, just continue without password
+    except Exception:
+        pass  # Ignore errors, just continue without password
 
     return None
 
@@ -91,10 +95,10 @@ def parse(file_path, bank, output, password):
     file_path = Path(file_path)
     expenses = []
 
-    # Get password from config if PDF
+    # Get password from config if PDF (using bank CLI identifier)
     pdf_password = password
     if not pdf_password and file_path.suffix.lower() == ".pdf":
-        pdf_password = get_pdf_password(str(file_path))
+        pdf_password = get_pdf_password(str(file_path), bank)
 
     if bank == "hdfc-cred" and file_path.suffix.lower() == ".pdf":
         click.echo("Parsing HDFC Credit Card PDF...")
@@ -120,8 +124,12 @@ def parse(file_path, bank, output, password):
         click.echo("Parsing SBI statement...")
         parser = SBIStatementParser()
         expenses = parser.parse_file(str(file_path))
+    elif bank == "amazon-pay" and file_path.suffix.lower() == ".pdf":
+        click.echo("Parsing Amazon Pay PDF...")
+        expenses = amazon_pay_statement(str(file_path), pdf_password)
     else:
-        click.echo("Unsupported bank. Supported: hdfc-cred, hdfc-bank, sbi")
+        supported_list = ", ".join(supported_banks[:-1]) + ", and " + supported_banks[-1] if len(supported_banks) > 1 else supported_banks[0] if supported_banks else "none"
+        click.echo(f"Unsupported bank '{bank}'. Supported: {supported_list}")
         return
     
     if not expenses:
