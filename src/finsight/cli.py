@@ -1,5 +1,6 @@
 import click
 from pathlib import Path
+import yaml
 
 from .parsers import hdfc_cred_bill, HDFCStatementParser, SBIStatementParser
 from .utils import write_expenses_convert, analyze_spending, load_expenses_from_csv
@@ -8,6 +9,22 @@ try:
     from .gmail_sync import sync_gmail as gmail_sync_command
 except ImportError:
     gmail_sync_command = None
+
+# Load supported banks configuration
+def load_banks_config():
+    """Load bank configuration from YAML."""
+    config_path = Path(__file__).parent / '..' / '..' / 'config' / 'banks.yaml'
+    try:
+        with open(config_path, 'r') as f:
+            return yaml.safe_load(f)
+    except FileNotFoundError:
+        click.echo("Error: config/banks.yaml not found")
+        return {"supported_bank_identifiers": ["hdfc-cred", "hdfc-bank", "sbi", "auto"]}
+
+# Initialize banks config
+banks_config = load_banks_config()
+supported_banks = banks_config.get('supported_bank_identifiers', [])
+bank_details = banks_config.get('banks', {})
 
 @click.group()
 def cli():
@@ -50,9 +67,24 @@ def get_pdf_password(file_path: str) -> str:
 
     return None
 
+def format_bank_help():
+    """Format help text for bank options from config."""
+    if not bank_details:
+        return "hdfc-cred, hdfc-bank, sbi, auto"
+
+    bank_list = []
+    for bank_key, details in bank_details.items():
+        cli_id = details.get('cli_identifier', bank_key)
+        name = details.get('name', cli_id)
+        description = details.get('description', name)
+        bank_list.append(f"{cli_id} ({name})")
+
+    auto_option = "auto (auto-detect)"
+    return ", ".join(bank_list) + f", {auto_option}"
+
 @cli.command()
 @click.argument("file_path", type=click.Path(exists=True, dir_okay=False))
-@click.option("--bank", default="auto", help="Bank type: hdfc-cred, hdfc-bank, sbi, auto")
+@click.option("--bank", default="auto", help=f"Bank type: {format_bank_help()}")
 @click.option("--output", default="unified.csv", help="Output CSV file")
 @click.option("--password", default=None, help="Password for encrypted PDF files")
 def parse(file_path, bank, output, password):
