@@ -14,6 +14,13 @@ banks:
       - "hdfc_card"
       - "hdfc"
     description: "Official HDFC credit card statement PDFs"
+    # Gmail sync configuration
+    gmail_account: "saiyashwanthmamilla@gmail.com"
+    gmail_subjects:
+      - "subject:(HDFC Credit Card Statement)"
+      - "subject:(HDFC Diners Privilege Credit Card Statement)"
+    gmail_attachments:
+      - "*.pdf"
 
   hdfc_bank:
     name: "HDFC Bank"
@@ -24,6 +31,15 @@ banks:
       - "hdfc_bank"
       - "hdfc"
     description: "HDFC bank account CSV exports via NetBanking"
+    # Gmail sync configuration
+    gmail_account: "saiyashwanthmamilla@gmail.com"
+    gmail_subjects:
+      - "subject:(HDFC Bank Statement)"
+      - "subject:(HDFC Account Statement)"
+      - "subject:(HDFC Mobile Banking Statement)"
+    gmail_attachments:
+      - "*.csv"
+      - "*.pdf"
 
   sbi_bank:
     name: "State Bank of India (SBI)"
@@ -45,6 +61,14 @@ banks:
       - "amazon"
       - "retail_amazon"
     description: "Amazon Pay transaction statements"
+    # Gmail sync configuration
+    gmail_account: "yashwanth.sunny8047@gmail.com"
+    gmail_subjects:
+      - "subject:(Amazon Pay ICICI Bank Credit Card Statement)"
+      - "subject:(Amazon Pay Retail Transactions)"
+      - "subject:(Amazon Pay Statement)"
+    gmail_attachments:
+      - "*.pdf"
 
 # Password matching rules
 # The system tries passwords in this order:

@@ -184,18 +184,127 @@ class GmailSync:
 def install_oauth():
     """Guide user through OAuth2 setup."""
     click.echo("""
-Gmail Integration Setup:
+    📧 Gmail Integration Setup:
 
-1. Go to the Google Cloud Console: https://console.cloud.google.com/
-2. Create a new project or select existing
-3. Enable Gmail API: APIs & Services > Library > search "Gmail API" > Enable
-4. Go to Credentials > Create Credentials > OAuth 2.0 Client ID
-5. Set application type to "Desktop application"
-6. Download the client_secret_*.json file and rename to credentials.json
-7. Place credentials.json in the project root
-8. First run will open OAuth flow in browser
+    1. Go to the Google Cloud Console: https://console.cloud.google.com/
+    2. Create a new project or select existing
+    3. Enable Gmail API: APIs & Services > Library > search "Gmail API" > Enable
+    4. Go to Credentials > Create Credentials > OAuth 2.0 Client ID
+    5. Set application type to "Desktop application"
+    6. Download the client_secret_*.json file and rename to credentials.json
+    7. Place credentials.json in the project root
+    8. First run will open OAuth flow in browser
 
-""")
+    🔒 Account Protection: The system verifies the selected account against config
+                        to prevent wrong account selection mistakes.
+    """)
+
+def verify_gmail_account(credentials: Credentials, expected_email: str = None) -> str:
+    """
+    Verify Gmail account after OAuth authorization.
+
+    Args:
+        credentials: OAuth2 credentials object
+        expected_email: Expected email address (optional)
+
+    Returns:
+        str: Verified Gmail account email
+
+    Raises:
+        ValueError: If account verification fails or wrong account selected
+    """
+    try:
+        service = build('gmail', 'v1', credentials=credentials)
+        profile = service.users().getProfile(userId='me').execute()
+        actual_email = profile['emailAddress']
+
+        if expected_email and actual_email.lower() != expected_email.lower():
+            click.echo(f"🚨 ACCOUNT MISMATCH DETECTED!")
+            click.echo(f"   CLI Request: {expected_email}")
+            click.echo(f"   Browser Selection: {actual_email}")
+            click.echo(f"   ❌ Please retry OAuth and select the correct Gmail account")
+            raise ValueError(f"Wrong account selected. Expected: {expected_email}, Got: {actual_email}")
+
+        return actual_email
+
+    except HttpError as e:
+        raise Exception(f"Gmail API error during verification: {e}")
+
+class MultiAccountGmail:
+    """Manages multiple Gmail account tokens and OAuth flows."""
+
+    def __init__(self, config_path: str = 'config/gmail_config.yaml'):
+        self.config_path = config_path
+        self.config = self.load_config()
+        self.tokens_dir = Path('config/tokens')
+        self.tokens_dir.mkdir(exist_ok=True)
+
+    def load_config(self) -> dict:
+        """Load Gmail account configuration."""
+        if not Path(self.config_path).exists():
+            raise FileNotFoundError(f"Config file not found: {self.config_path}")
+
+        with open(self.config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        return config
+
+    def get_credentials_file_for_account(self, email: str) -> str:
+        """
+        Return the appropriate credentials file for an account.
+        For now, use single credentials.json for all accounts.
+        """
+        # Get account config from gmail_accounts section
+        account_config = self.config.get('gmail_accounts', {}).get(email, {})
+        return account_config.get('credentials_file', 'credentials.json')
+
+    def get_token_file_for_account(self, email: str) -> str:
+        """Return the token file path for a specific account."""
+        account_config = self.config.get('gmail_accounts', {}).get(email, {})
+        token_filename = account_config.get('token_file', f"token_{email.split('@')[0]}.json")
+        return str(self.tokens_dir / token_filename)
+
+    def get_credentials_for_account(self, account_email: str) -> Credentials:
+        """
+        Get OAuth2 credentials for a specific Gmail account.
+        Handles token file storage per account with verification.
+        """
+        token_file = self.get_token_file_for_account(account_email)
+        credentials_file = self.get_credentials_file_for_account(account_email)
+
+        creds = None
+
+        # Check if token exists for this account
+        if os.path.exists(token_file):
+            creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            else:
+                click.echo(f"🔐 OAuth Setup for: {account_email}")
+                click.echo(f"📧 Browser will open - SELECT: {account_email}")
+
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    credentials_file, SCOPES)
+                creds = flow.run_local_server(port=0)
+
+                # Verify the account immediately after authorization
+                try:
+                    verified_email = verify_gmail_account(creds, expected_email=account_email)
+                    click.echo(f"✅ Account verified: {verified_email}")
+                except ValueError as e:
+                    # Delete the invalid token file
+                    if os.path.exists(token_file):
+                        os.remove(token_file)
+                        click.echo(f"🗑️  Deleted invalid token file: {token_file}")
+                    raise e
+
+            # Save the credentials for this account
+            with open(token_file, 'w') as f:
+                f.write(creds.to_json())
+            click.echo(f"💾 Token saved: {token_file}")
+
+        return creds
 
 @click.command()
 @click.option('--config', default='config/gmail_config.yaml', help='Path to Gmail config file')
