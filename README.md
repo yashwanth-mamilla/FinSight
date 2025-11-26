@@ -41,10 +41,29 @@ finsight analyze my_statements.csv
 
 ## Supported Banks/Formats
 
-- HDFC Credit Card (PDF)
-- HDFC Bank CSV
-- SBI Bank CSV
-- Excel support planned
+| Bank | CLI Identifier | Formats | Password Identifiers (passwords.yaml) |
+|------|---------------|---------|--------------------------------------|
+| HDFC Credit Card | `hdfc-cred` | PDF | `hdfc`, `hdfc_card`, filename stem |
+| HDFC Bank | `hdfc-bank` | CSV | `hdfc`, `hdfc_bank`, filename stem |
+| SBI | `sbi` | CSV | `sbi`, `state_bank`, filename stem |
+
+### Password Configuration
+
+Passwords can be configured by exact filename, bank name, or patterns:
+
+```yaml
+passwords:
+  # Exact filename match (for recurring monthly statements)
+  HDFC_Card_St_Mar_2025: "specific_pwd123"
+
+  # Bank-level default (applies to all bank statements)
+  hdfc_card: "default_card_pass"
+
+  # Pattern matching (searched in filename)
+  amazon_pay: "common_pass"
+```
+
+**How it works:** Parser checks passwords in order: filename stem → bank keywords → no password.
 
 ## Gmail Integration (Auto-download Statements)
 
