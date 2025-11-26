@@ -38,3 +38,6 @@ config/passwords.yaml
 
 # Downloaded bank statements (sensitive financial data)
 statements/
+*.token.json
+token_*.json
+token.json
