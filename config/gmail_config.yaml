@@ -1,0 +1,37 @@
+# Gmail Integration Configuration
+# Define email search queries for bank statements
+
+gmail:
+  # Search queries for email subjects and attachment patterns
+  queries:
+    # ICICI Bank Credit Card Statements
+    - subject: "subject:(ICICI Bank Credit Card Statement OR ICICI CC Statement OR CREDIT CARD STATEMENT)"
+      attachment: "*.pdf"
+    
+    # HDFC Bank Statements
+    - subject: "subject:(HDFC Bank Statement OR HDFC Account Statement OR HDFC Mobile Banking Statement)"
+      attachment: "*.pdf"
+    
+    # HDFC Credit Card Statements
+    - subject: "subject:(HDFC Credit Card Statement OR HDFC Paycard Statement)"
+      attachment: "*.pdf"
+    
+    # SBI Bank Statements
+    - subject: "subject:(SBI Bank Statement OR State Bank Statement OR SBI Account Statement)"
+      attachment: "*.pdf"
+    
+    # Axis Bank Statements
+    - subject: "subject:(Axis Bank Statement OR Axis E-Statement)"
+      attachment: "*.pdf"
+    
+    # Amazon Pay Statements
+    - subject: "subject:(Amazon Pay ICICI Bank Credit Card Statement)"
+      attachment: "*.pdf"
+    
+    # Kotak Mahindra Bank Statements
+    - subject: "subject:(Kotak Bank Statement OR Kotak Account Statement)"
+      attachment: "*.pdf"
+    
+    # Federal Bank Statements
+    - subject: "subject:(Federal Bank Statement OR Federal e-Statement)"
+      attachment: "*.pdf"

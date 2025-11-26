@@ -1,0 +1,61 @@
+#
+# FinSight Supported Banks Configuration
+# Defines bank parsers, CLI identifiers, and password mappings
+#
+
+banks:
+  hdfc_credit:
+    name: "HDFC Credit Card"
+    cli_identifier: "hdfc-cred"
+    formats: ["pdf"]
+    parser_class: "HDFCCreditCardParser"
+    password_identifiers:
+      - "hdfc_cred"
+      - "hdfc_card"
+      - "hdfc"
+    description: "Official HDFC credit card statement PDFs"
+
+  hdfc_bank:
+    name: "HDFC Bank"
+    cli_identifier: "hdfc-bank"
+    formats: ["csv"]
+    parser_class: "HDFCStatementParser"
+    password_identifiers:
+      - "hdfc_bank"
+      - "hdfc"
+    description: "HDFC bank account CSV exports via NetBanking"
+
+  sbi_bank:
+    name: "State Bank of India (SBI)"
+    cli_identifier: "sbi"
+    formats: ["csv"]
+    parser_class: "SBIStatementParser"
+    password_identifiers:
+      - "sbi"
+      - "state_bank"
+    description: "SBI account CSV statements"
+
+  amazon_pay:
+    name: "Amazon Pay"
+    cli_identifier: "amazon-pay"
+    formats: ["pdf"]
+    parser_class: "AmazonPayParser"
+    password_identifiers:
+      - "amazon_pay"
+      - "amazon"
+      - "retail_amazon"
+    description: "Amazon Pay transaction statements"
+
+# Password matching rules
+# The system tries passwords in this order:
+# 1. Exact filename match: Use PDF filename as key in passwords.yaml
+#    Example: "HDFC_E_Statement_Apr2025" -> specific password
+# 2. Bank identifier match: Match keywords from password_identifiers list
+#    Example: "hdfc_card", "sbi" keywords in filename or keys
+# 3. No password: Attempt to parse without password (if supported)
+
+supported_bank_identifiers:
+  - "hdfc-cred"
+  - "hdfc-bank"
+  - "sbi"
+  - "amazon-pay"
