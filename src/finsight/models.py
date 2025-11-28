@@ -53,11 +53,23 @@ def parse_datetime(date_str: str, debug) -> tuple:
     """
     Parses date and time from a string.
     - If "null" is present, removes it before parsing.
+    - Supports formats: DD/MM/YYYY HH:MM:SS, DD/MM/YYYY, DD/MM/YYYY| HH:MM
     - If time is missing, defaults to '00:00:00'.
     """
     try:
         date_str = date_str.lower().replace("null", "").strip()  # Remove "null" if present
 
+        # Handle HDFC format: DD/MM/YYYY| HH:MM
+        if "|" in date_str:
+            parts = date_str.split("|")
+            if len(parts) == 2:
+                date_part = parts[0].strip()
+                time_part = parts[1].strip() + ":00"  # Add seconds
+                full_datetime_str = f"{date_part} {time_part}"
+                parsed_datetime = datetime.strptime(full_datetime_str, '%d/%m/%Y %H:%M:%S')
+                return parsed_datetime.date(), time_part
+
+        # Handle normal format with space: DD/MM/YYYY HH:MM:SS
         if " " in date_str:  # If time is present
             parsed_datetime = datetime.strptime(date_str, '%d/%m/%Y %H:%M:%S')
             return parsed_datetime.date(), parsed_datetime.strftime('%H:%M:%S')

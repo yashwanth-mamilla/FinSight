@@ -8,7 +8,6 @@ Run with: python -m pytest tests/test_ai_categorization.py -v
 
 import sys
 import time
-import pytest
 sys.path.insert(0, 'src')
 
 def test_ai_categorization():
