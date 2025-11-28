@@ -6,6 +6,12 @@ import json
 from pydantic import BaseModel
 from .config import MERCHANT_NAMES, CATEGORIES, ENABLE_AI
 
+try:
+    # Import the CLI override if available
+    from .cli import ENABLE_AI_OVERRIDE
+except ImportError:
+    ENABLE_AI_OVERRIDE = None
+
 # Global list to manage persons
 class Person:
     def __init__(self, name: str):
@@ -63,20 +69,21 @@ def parse_datetime(date_str: str, debug) -> tuple:
             print(f"Skipping invalid date format: {date_str}")
         return None, None  # Handle incorrect formats safely
 
-def extract_name(description: str) -> str:
+def extract_name(description: str, bank_name: Optional[str] = None) -> str:
     """Extracts merchant name from transaction description."""
     description = description.lower()  # Normalize for case-insensitive matching
 
     for merchant, keywords in MERCHANT_NAMES.items():
         if any(keyword in description for keyword in keywords):
             return merchant  # Return first matching merchant name
-    
-    if LLM_ENABLE :
-        return extract_name_ai(description)
+
+    ai_enabled = ENABLE_AI_OVERRIDE if ENABLE_AI_OVERRIDE is not None else ENABLE_AI
+    if ai_enabled :
+        return extract_name_ai(description, bank_name)
     else :
         return ""
 
-def extract_name_ai(description: str)-> str:
+def extract_name_ai(description: str, bank_name: Optional[str] = None)-> str:
     # Import here or in init, but for now inline
     try:
         from langchain_ollama import ChatOllama
@@ -130,7 +137,8 @@ def categorize_transaction(name: Optional[str], description: str) -> str:
         if any(keyword in description for keyword in keywords):
             return category  # Return category if description matches
 
-    if LLM_ENABLE :
+    ai_enabled = ENABLE_AI_OVERRIDE if ENABLE_AI_OVERRIDE is not None else ENABLE_AI
+    if ai_enabled :
         category = categorize_transaction_with_ai(name, description)
         return category
     else :

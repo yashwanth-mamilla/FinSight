@@ -6,7 +6,7 @@ import pdfplumber
 from .models import ExpenseItem, clean_amount, parse_datetime
 
 # Amazon Pay PDF Parser
-def amazon_pay_statement(pdf_path: str, password: str = None) -> List[ExpenseItem]:
+def amazon_pay_statement(pdf_path: str, password: str = None, bank_name: str = "Amazon Pay") -> List[ExpenseItem]:
     """Parse Amazon Pay statement PDF using text-based transaction extraction."""
     transactions = []
     import re
@@ -119,7 +119,8 @@ def amazon_pay_statement(pdf_path: str, password: str = None) -> List[ExpenseIte
                         date=date,
                         time=None,
                         description=description.strip(),
-                        amount=amount
+                        amount=amount,
+                        bank_name=bank_name
                     )
                     transactions.append(expense)
 
@@ -130,7 +131,7 @@ def amazon_pay_statement(pdf_path: str, password: str = None) -> List[ExpenseIte
     return transactions
 
 # Moved from a.py
-def hdfc_cred_bill(pdf_path: str, password: str = None) -> List[ExpenseItem]:
+def hdfc_cred_bill(pdf_path: str, password: str = None, bank_name: str = "HDFC Credit Card") -> List[ExpenseItem]:
     transactions = []
 
     with pdfplumber.open(pdf_path, password=password) as pdf:
@@ -169,7 +170,7 @@ def hdfc_cred_bill(pdf_path: str, password: str = None) -> List[ExpenseItem]:
                     # 5️⃣ **Process transaction**
                     expense = ExpenseItem(
                         date=date, time=time, description=description,
-                        amount=amount
+                        amount=amount, bank_name=bank_name
                     )
                     transactions.append(expense)
                     # if expense.category == 'Uncategorized':
@@ -178,7 +179,7 @@ def hdfc_cred_bill(pdf_path: str, password: str = None) -> List[ExpenseItem]:
     return transactions
 
 class HDFCStatementParser:
-    def parse_file(self, file_path: str) -> List[ExpenseItem]:
+    def parse_file(self, file_path: str, bank_name: str = "HDFC Bank") -> List[ExpenseItem]:
         """ Parses CSV-like HDFC bank statements from a file. """
         expenses = []
         if not os.path.exists(file_path):
@@ -210,12 +211,12 @@ class HDFCStatementParser:
                 except ValueError:
                     continue
 
-                expense = ExpenseItem(date=date, time=time, description=description, amount=amount)
+                expense = ExpenseItem(date=date, time=time, description=description, amount=amount, bank_name=bank_name)
                 expenses.append(expense)
         return expenses
 
 class SBIStatementParser:
-    def parse_file(self, file_path: str) -> List[ExpenseItem]:
+    def parse_file(self, file_path: str, bank_name: str = "State Bank of India (SBI)") -> List[ExpenseItem]:
         """ Parses CSV-like SBI bank statements from a file. """
         expenses = []
         if not os.path.exists(file_path):
@@ -243,6 +244,6 @@ class SBIStatementParser:
                 except ValueError:
                     continue
 
-                expense = ExpenseItem(date=date, time=time, description=description, amount=amount)
+                expense = ExpenseItem(date=date, time=time, description=description, amount=amount, bank_name=bank_name)
                 expenses.append(expense)
         return expenses

@@ -69,20 +69,21 @@ def parse_datetime(date_str: str, debug) -> tuple:
             print(f"Skipping invalid date format: {date_str}")
         return None, None  # Handle incorrect formats safely
 
-def extract_name(description: str) -> str:
+def extract_name(description: str, bank_name: Optional[str] = None) -> str:
     """Extracts merchant name from transaction description."""
     description = description.lower()  # Normalize for case-insensitive matching
 
     for merchant, keywords in MERCHANT_NAMES.items():
         if any(keyword in description for keyword in keywords):
             return merchant  # Return first matching merchant name
-    
-    if ENABLE_AI :
-        return extract_name_ai(description)
+
+    ai_enabled = ENABLE_AI_OVERRIDE if ENABLE_AI_OVERRIDE is not None else ENABLE_AI
+    if ai_enabled :
+        return extract_name_ai(description, bank_name)
     else :
         return ""
 
-def extract_name_ai(description: str)-> str:
+def extract_name_ai(description: str, bank_name: Optional[str] = None)-> str:
     # Import here or in init, but for now inline
     try:
         from langchain_ollama import ChatOllama
@@ -94,7 +95,8 @@ def extract_name_ai(description: str)-> str:
             # other parameters as needed
         )
 
-        str = f'Suggest a merchant name for the expense item {description}, I see in my payments.'
+        bank_context = f" This is a {bank_name} bank transaction." if bank_name else ""
+        str = f'Suggest a merchant name for the expense item {description}, I see in my payments.{bank_context}'
         # Define the system and human messages
         messages = [
             ("system", '''You are a helpful assistant. 
@@ -119,7 +121,7 @@ def extract_name_ai(description: str)-> str:
     except ImportError:
         return ""
 
-def categorize_transaction(name: Optional[str], description: str) -> str:
+def categorize_transaction(name: Optional[str], description: str, bank_name: Optional[str] = None) -> str:
     
     """ Categorizes transactions based on name (first) and description (fallback). """
     name = name.lower() if name else None
@@ -138,12 +140,12 @@ def categorize_transaction(name: Optional[str], description: str) -> str:
 
     ai_enabled = ENABLE_AI_OVERRIDE if ENABLE_AI_OVERRIDE is not None else ENABLE_AI
     if ai_enabled :
-        category = categorize_transaction_with_ai(name, description)
+        category = categorize_transaction_with_ai(name, description, bank_name)
         return category
     else :
         return "Uncategorized"  # Default if no match is found
 
-def categorize_transaction_with_ai(name: Optional[str], description: str) -> str:
+def categorize_transaction_with_ai(name: Optional[str], description: str, bank_name: Optional[str] = None) -> str:
     try:
         from langchain_ollama import ChatOllama
         # Initialize the ChatOllama model
@@ -154,7 +156,8 @@ def categorize_transaction_with_ai(name: Optional[str], description: str) -> str
             # other parameters as needed
         )
 
-        str = f'Suggest a category for the merchant {description} I see in my payments. Categories: [Shopping, Transport, Food and groceries, Entertainment, Utilities, Salary, Bank Fees, Healthcare, Education, Investment, Travel].'
+        bank_context = f" This is for a {bank_name} bank statement. Bank-specific fees should be categorized as 'Bank Fees'." if bank_name else ""
+        str = f'Suggest a category for the merchant {description} I see in my payments. Categories: [Shopping, Transport, Food and groceries, Entertainment, Utilities, Salary, Bank Fees, Healthcare, Education, Investment, Travel].{bank_context}'
         # Define the system and human messages
         messages = [
             ("system", '''You are a helpful assistant. 
@@ -188,14 +191,15 @@ class ExpenseItem:
         amount: float,
         category: Optional[str] = None,
         person_name: Optional[str] = None,
-        split_details: Optional[Dict[str, float]] = None
+        split_details: Optional[Dict[str, float]] = None,
+        bank_name: Optional[str] = None
     ):
         self.date = date
         self.time = time
         self.description = description
-        self.name = extract_name(description)  # Extracted name from description
+        self.name = extract_name(description, bank_name)  # Extracted name from description
         self.amount = amount
-        self.category = category if category else categorize_transaction(self.name, self.description)  # Auto-categorize
+        self.category = category if category else categorize_transaction(self.name, self.description, bank_name)  # Auto-categorize
         self.person = get_or_create_person(person_name) if person_name else None
         self.split_details = {}
 

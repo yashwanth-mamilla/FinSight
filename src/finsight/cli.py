@@ -97,12 +97,27 @@ def format_bank_help():
     auto_option = "auto (auto-detect)"
     return ", ".join(bank_list) + f", {auto_option}"
 
+def get_bank_name(cli_identifier: str) -> str:
+    """Get human-readable bank name from CLI identifier."""
+    if cli_identifier == "auto":
+        return "Auto-detected"
+
+    # Look up the human readable name from banks config
+    for bank_key, details in bank_details.items():
+        if details.get('cli_identifier') == cli_identifier:
+            return details.get('name', cli_identifier)
+
+    # Fallback: return cli_identifier as-is
+    return cli_identifier
+
 @cli.command()
 @click.argument("file_path", type=click.Path(exists=True, dir_okay=False))
 @click.option("--bank", default="auto", help=f"Bank type: {format_bank_help()}")
 @click.option("--output", default="unified.csv", help="Output CSV file")
 @click.option("--db", is_flag=True, help="Store transactions in database")
 @click.option("--password", default=None, help="Password for encrypted PDF files")
+@click.option("--no-ai", is_flag=True, help="Disable AI categorization (use rule-based only)")
+@click.option("--force-ai", is_flag=True, help="Force AI categorization even if disabled in config")
 
 def parse(file_path, bank, output, db, password, no_ai, force_ai):
     # Handle AI enable/disable options
@@ -149,7 +164,8 @@ def parse(file_path, bank, output, db, password, no_ai, force_ai):
         expenses = parser.parse_file(str(file_path))
     elif bank == "amazon-pay" and file_path.suffix.lower() == ".pdf":
         click.echo("Parsing Amazon Pay PDF...")
-        expenses = amazon_pay_statement(str(file_path), pdf_password)
+        bank_name = get_bank_name(bank)
+        expenses = amazon_pay_statement(str(file_path), pdf_password, bank_name)
     else:
         supported_list = ", ".join(supported_banks[:-1]) + ", and " + supported_banks[-1] if len(supported_banks) > 1 else supported_banks[0] if supported_banks else "none"
         click.echo(f"Unsupported bank '{bank}'. Supported: {supported_list}")
