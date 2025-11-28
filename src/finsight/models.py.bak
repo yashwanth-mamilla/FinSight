@@ -6,12 +6,6 @@ import json
 from pydantic import BaseModel
 from .config import MERCHANT_NAMES, CATEGORIES, ENABLE_AI
 
-try:
-    # Import the CLI override if available
-    from .cli import ENABLE_AI_OVERRIDE
-except ImportError:
-    ENABLE_AI_OVERRIDE = None
-
 # Global list to manage persons
 class Person:
     def __init__(self, name: str):
@@ -77,7 +71,7 @@ def extract_name(description: str) -> str:
         if any(keyword in description for keyword in keywords):
             return merchant  # Return first matching merchant name
     
-    if ENABLE_AI :
+    if LLM_ENABLE :
         return extract_name_ai(description)
     else :
         return ""
@@ -136,8 +130,7 @@ def categorize_transaction(name: Optional[str], description: str) -> str:
         if any(keyword in description for keyword in keywords):
             return category  # Return category if description matches
 
-    ai_enabled = ENABLE_AI_OVERRIDE if ENABLE_AI_OVERRIDE is not None else ENABLE_AI
-    if ai_enabled :
+    if LLM_ENABLE :
         category = categorize_transaction_with_ai(name, description)
         return category
     else :

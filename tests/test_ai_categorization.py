@@ -2,44 +2,47 @@
 """
 Test script for FinSight AI categorization functionality.
 Tests both extract_name_ai() and categorize_transaction_with_ai() functions.
+
+Run with: python -m pytest tests/test_ai_categorization.py -v
 """
 
 import sys
 import time
+import pytest
 sys.path.insert(0, 'src')
 
 def test_ai_categorization():
     """Test AI-enabled categorization vs rule-based categorization"""
 
-    from finsight.models import extract_name_ai, categorize_transaction_with_ai, LLM_ENABLE
+    from finsight.models import extract_name_ai, categorize_transaction_with_ai, ENABLE_AI
     from finsight.config import MERCHANT_NAMES, CATEGORIES
     from finsight.models import extract_name, categorize_transaction
 
     test_transactions = [
-        "swiggy order at taj maral near mathikere bengaluru karnataka india",
-        "uber trip from koramangala to marathahalli via whitefield",
-        "netflix subscription renewal bill",
-        "amazon.in order for wireless earbuds",
-        "starbucks coffee at koramangala forum",
-        "zomato recharge via bottomsheet android app",
-        "icici bank atm withdrawal at koramangala",
-        "swiggy instamart order vegetables and milk",
-        "ola cab ride to airport",
-        "zepto delivery order",
-        "puma sports shoes online purchase",
-        "cult.fit premium membership renewal",
-        "openai chatgpt subscription"
+        ("swiggy order at taj maral near mathikere bengaluru karnataka india", "Swiggy", "Food and groceries"),
+        ("uber trip from koramangala to marathahalli via whitefield", "Uber", "Transport"),
+        ("netflix subscription renewal bill", "Netflix", "Entertainment"),
+        ("amazon.in order for wireless earbuds", "Amazon", "Shopping"),
+        ("starbucks coffee at koramangala forum", "Starbucks", "Food and groceries"),
+        ("zomato recharge via bottomsheet android app", "Zomato", "Food and groceries"),
+        ("icici bank atm withdrawal at koramangala", "ICICI Bank", "Bank Fees"),
+        ("swiggy instamart order vegetables and milk", "Swiggy", "Food and groceries"),
+        ("ola cab ride to airport", "Ola", "Transport"),
+        ("zepto delivery order", "", "Food and groceries"),  # Should extract merchant
+        ("puma sports shoes online purchase", "Puma", "Shopping"),
+        ("cult.fit premium membership renewal", "Cult.fit", "Healthcare"),
+        ("openai chatgpt subscription", "OPENAI", "Education")
     ]
 
     print("🐧 FinSight AI Categorization Testing")
     print("=" * 60)
-    print(f"LLM_ENABLE = {LLM_ENABLE}")
+    print(f"ENABLE_AI = {ENABLE_AI}")
     print(f"Ollama model: llama3.2")
     print()
 
     results = []
 
-    for i, description in enumerate(test_transactions, 1):
+    for i, (description, expected_merchant, expected_category) in enumerate(test_transactions, 1):
         print(f"🧪 Test {i:2d}: '{description[:50]}{'...' if len(description) > 50 else ''}'")
 
         # Rule-based categorization (fallback)
@@ -50,8 +53,8 @@ def test_ai_categorization():
         start_time = time.time()
 
         try:
-            ai_name = extract_name_ai(description) if LLM_ENABLE else rule_name
-            ai_category = categorize_transaction_with_ai(ai_name, description) if LLM_ENABLE else rule_category
+            ai_name = extract_name_ai(description) if ENABLE_AI else rule_name
+            ai_category = categorize_transaction_with_ai(ai_name, description) if ENABLE_AI else rule_category
             ai_time = time.time() - start_time
             ai_status = "✅"
         except Exception as e:
@@ -63,6 +66,8 @@ def test_ai_categorization():
 
         results.append({
             'description': description,
+            'expected_merchant': expected_merchant,
+            'expected_category': expected_category,
             'rule_name': rule_name,
             'rule_category': rule_category,
             'ai_name': ai_name,
@@ -71,6 +76,7 @@ def test_ai_categorization():
             'ai_status': ai_status
         })
 
+        print(f"   Expected:  '{expected_merchant}' → {expected_category}")
         print(f"   Rule-based: '{rule_name}' → {rule_category}")
         print(f"   AI-powered:  '{ai_name}' → {ai_category} ({ai_time:.2f}s) {ai_status}")
         print()
@@ -99,4 +105,29 @@ def test_ai_categorization():
 
     return results
 
+def test_ai_disabled():
+    """Test that AI functions fall back when ENABLE_AI=False"""
+
+    # Temporarily disable AI
+    from finsight import config
+    original_value = config.ENABLE_AI
+    config.ENABLE_AI = False
+
+    try:
+        from finsight.models import extract_name_ai, categorize_transaction_with_ai
+
+        # These should return fallback values or empty strings
+        name = extract_name_ai("test transaction")
+        category = categorize_transaction_with_ai("", "test transaction")
+
+        print(f"AI Disabled Test - Name: '{name}', Category: '{category}'")
+        assert name == "" or name is None  # Should return fallback
+        assert category == "Uncategorized" or category is None
+
+    finally:
+        # Restore original value
+        config.ENABLE_AI = original_value
+
 if __name__ == "__main__":
+    test_ai_categorization()
+    print("\n" + "="*60)

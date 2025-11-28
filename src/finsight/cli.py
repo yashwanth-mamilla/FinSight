@@ -13,6 +13,9 @@ from .parsers import hdfc_cred_bill, amazon_pay_statement, HDFCStatementParser, 
 from .utils import write_expenses_convert, analyze_spending, load_expenses_from_csv
 from .database import get_database
 
+# Global AI enable/disable override
+ENABLE_AI_OVERRIDE = None
+
 try:
     from .gmail_sync import sync_gmail as gmail_sync_command
 except ImportError:
@@ -100,7 +103,18 @@ def format_bank_help():
 @click.option("--output", default="unified.csv", help="Output CSV file")
 @click.option("--db", is_flag=True, help="Store transactions in database")
 @click.option("--password", default=None, help="Password for encrypted PDF files")
-def parse(file_path, bank, output, db, password):
+
+def parse(file_path, bank, output, db, password, no_ai, force_ai):
+    # Handle AI enable/disable options
+    global ENABLE_AI_OVERRIDE
+    ENABLE_AI_OVERRIDE = None
+
+    if no_ai:
+        ENABLE_AI_OVERRIDE = False
+        click.echo("🔧 AI categorization disabled (using rule-based only)")
+    elif force_ai:
+        ENABLE_AI_OVERRIDE = True
+        click.echo("⚡ AI categorization enabled (forced)")
     file_path = Path(file_path)
     expenses = []
 
