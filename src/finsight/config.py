@@ -1,4 +1,4 @@
-LLM_ENABLE = False
+ENABLE_AI = True
 
 MERCHANT_NAMES = {
     "Amazon": ["amazon", "amazon.in"],

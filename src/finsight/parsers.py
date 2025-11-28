@@ -1,12 +1,13 @@
 import os
 import csv
+import re
 from datetime import datetime
 from typing import List, Optional, Dict
 import pdfplumber
 from .models import ExpenseItem, clean_amount, parse_datetime
 
 # Amazon Pay PDF Parser
-def amazon_pay_statement(pdf_path: str, password: str = None) -> List[ExpenseItem]:
+def amazon_pay_statement(pdf_path: str, password: str = None, bank_name: str = "Amazon Pay") -> List[ExpenseItem]:
     """Parse Amazon Pay statement PDF using text-based transaction extraction."""
     transactions = []
     import re
@@ -119,7 +120,8 @@ def amazon_pay_statement(pdf_path: str, password: str = None) -> List[ExpenseIte
                         date=date,
                         time=None,
                         description=description.strip(),
-                        amount=amount
+                        amount=amount,
+                        bank_name=bank_name
                     )
                     transactions.append(expense)
 
@@ -130,55 +132,83 @@ def amazon_pay_statement(pdf_path: str, password: str = None) -> List[ExpenseIte
     return transactions
 
 # Moved from a.py
-def hdfc_cred_bill(pdf_path: str, password: str = None) -> List[ExpenseItem]:
+def hdfc_cred_bill(pdf_path: str, password: str = None, bank_name: str = "HDFC Credit Card") -> List[ExpenseItem]:
     transactions = []
+    print(f"DEBUG: Opening PDF {pdf_path} with password: {password}")
 
     with pdfplumber.open(pdf_path, password=password) as pdf:
-        for page in pdf.pages:
+        print(f"DEBUG: PDF has {len(pdf.pages)} pages")
+
+        for page_num, page in enumerate(pdf.pages):
+            print(f"DEBUG: Processing page {page_num + 1}")
             table = page.extract_table()
+
             if table:
-                for row in table[1:]:  # Skip header row
-                    # 1️⃣ **Skip completely empty rows**
-                    if not any(row) or all(cell in [None, '', ' '] for cell in row):
-                        continue
+                print(f"DEBUG: Page {page_num + 1} has table with {len(table)} rows, {len(table[0]) if table else 0} columns")
+                print(f"DEBUG: Table[0] (header): {table[0] if table else 'No table'}")
 
-                    # 2️⃣ **Extract date and check validity**
-                    date_str = row[0] if row[0] else None  # Ensure we have a valid date column
-                    if not date_str or len(date_str.strip()) < 10:
-                        continue
+                for row_idx, row in enumerate(table[1:], 1):  # Skip header row
+                    print(f"DEBUG: Row {row_idx}: {row}")
 
-                    date, time = parse_datetime(date_str, False)
-                    if date is None:
-                        continue
+                    # Handle HDFC single-column format
+                    if len(row) == 1 and row[0]:
+                        # Parse single column: "27/10/2025| 03:46 SWIGGYBENGALURU C 384.00 l"
+                        full_line = row[0].strip()
 
-                    # 3️⃣ **Extract description safely**
-                    description = row[1] if len(row) > 1 and row[1] else "No Description"
+                        # Skip if not enough content
+                        if len(full_line) < 20:
+                            print(f"DEBUG: Skipping short row {row_idx}")
+                            continue
 
-                    # 4️⃣ **Ensure the amount is present before conversion**
-                    amount_str = row[-2] if len(row) > 2 and row[-2] else None
-                    if not amount_str:
-                        print(f"Skipping row due to missing amount: {row}")
-                        continue
+                        # Extract date|time part - look for pattern "DD/MM/YYYY| HH:MM"
+                        date_match = re.search(r'(\d{2}/\d{2}/\d{4})\|\s*(\d{2}:\d{2})', full_line)
+                        if not date_match:
+                            print(f"DEBUG: No date/time found in row {row_idx}: '{full_line}'")
+                            continue
 
-                    try:
-                        amount = clean_amount(amount_str)
-                    except ValueError:
-                        print(f"Skipping row due to conversion error: {row}")
-                        continue
+                        date_time_str = f"{date_match.group(1)}| {date_match.group(2)}"
+                        date, time = parse_datetime(date_time_str, True)
+                        if date is None:
+                            print(f"DEBUG: Failed to parse date/time in row {row_idx}: '{date_time_str}'")
+                            continue
 
-                    # 5️⃣ **Process transaction**
-                    expense = ExpenseItem(
-                        date=date, time=time, description=description,
-                        amount=amount
-                    )
-                    transactions.append(expense)
-                    # if expense.category == 'Uncategorized':
-                    #     print(f"Uncategorized Expense: {expense}")
+                        # Extract description and amount - everything after the time
+                        remaining = full_line[date_match.end():].strip()
+
+                        # Look for amount pattern - "C AMOUNT l"
+                        amount_match = re.search(r'\bC\s+([\d,]+\.?\d*)\s+l\b', remaining)
+
+                        if not amount_match:
+                            print(f"DEBUG: No amount found in row {row_idx}: '{remaining}'")
+                            continue
+
+                        amount_str = amount_match.group(1)
+                        try:
+                            amount = float(amount_str.replace(',', ''))
+                        except ValueError:
+                            print(f"DEBUG: Invalid amount in row {row_idx}: '{amount_str}'")
+                            continue
+
+                        # Extract description - everything before "C AMOUNT l"
+                        # But remove reward indicators (patterns like "+ NUMBER")
+                        description_text = remaining[:amount_match.start()].strip()
+
+                        # Remove reward patterns like "+ 4", "+ 60", etc.
+                        description = re.sub(r'\s*\+\s+\d+', '', description_text).strip()
+
+                        print(f"DEBUG: Parsed - Date: {date}, Time: {time}, Desc: '{description}', Amount: {amount}")
+
+                        # Create ExpenseItem with parsed data
+                        expense = ExpenseItem(
+                            date=date, time=time, description=description,
+                            amount=amount, bank_name=bank_name
+                        )
+                        transactions.append(expense)
 
     return transactions
 
 class HDFCStatementParser:
-    def parse_file(self, file_path: str) -> List[ExpenseItem]:
+    def parse_file(self, file_path: str, bank_name: str = "HDFC Bank") -> List[ExpenseItem]:
         """ Parses CSV-like HDFC bank statements from a file. """
         expenses = []
         if not os.path.exists(file_path):
@@ -210,12 +240,12 @@ class HDFCStatementParser:
                 except ValueError:
                     continue
 
-                expense = ExpenseItem(date=date, time=time, description=description, amount=amount)
+                expense = ExpenseItem(date=date, time=time, description=description, amount=amount, bank_name=bank_name)
                 expenses.append(expense)
         return expenses
 
 class SBIStatementParser:
-    def parse_file(self, file_path: str) -> List[ExpenseItem]:
+    def parse_file(self, file_path: str, bank_name: str = "State Bank of India (SBI)") -> List[ExpenseItem]:
         """ Parses CSV-like SBI bank statements from a file. """
         expenses = []
         if not os.path.exists(file_path):
@@ -243,6 +273,6 @@ class SBIStatementParser:
                 except ValueError:
                     continue
 
-                expense = ExpenseItem(date=date, time=time, description=description, amount=amount)
+                expense = ExpenseItem(date=date, time=time, description=description, amount=amount, bank_name=bank_name)
                 expenses.append(expense)
         return expenses

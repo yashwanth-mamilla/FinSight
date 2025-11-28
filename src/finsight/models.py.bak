@@ -53,23 +53,11 @@ def parse_datetime(date_str: str, debug) -> tuple:
     """
     Parses date and time from a string.
     - If "null" is present, removes it before parsing.
-    - Supports formats: DD/MM/YYYY HH:MM:SS, DD/MM/YYYY, DD/MM/YYYY| HH:MM
     - If time is missing, defaults to '00:00:00'.
     """
     try:
         date_str = date_str.lower().replace("null", "").strip()  # Remove "null" if present
 
-        # Handle HDFC format: DD/MM/YYYY| HH:MM
-        if "|" in date_str:
-            parts = date_str.split("|")
-            if len(parts) == 2:
-                date_part = parts[0].strip()
-                time_part = parts[1].strip() + ":00"  # Add seconds
-                full_datetime_str = f"{date_part} {time_part}"
-                parsed_datetime = datetime.strptime(full_datetime_str, '%d/%m/%Y %H:%M:%S')
-                return parsed_datetime.date(), time_part
-
-        # Handle normal format with space: DD/MM/YYYY HH:MM:SS
         if " " in date_str:  # If time is present
             parsed_datetime = datetime.strptime(date_str, '%d/%m/%Y %H:%M:%S')
             return parsed_datetime.date(), parsed_datetime.strftime('%H:%M:%S')
@@ -107,8 +95,7 @@ def extract_name_ai(description: str, bank_name: Optional[str] = None)-> str:
             # other parameters as needed
         )
 
-        bank_context = f" This is a {bank_name} bank transaction." if bank_name else ""
-        str = f'Suggest a merchant name for the expense item {description}, I see in my payments.{bank_context}'
+        str = f'Suggest a merchant name for the expense item {description}, I see in my payments.'
         # Define the system and human messages
         messages = [
             ("system", '''You are a helpful assistant. 
@@ -133,7 +120,7 @@ def extract_name_ai(description: str, bank_name: Optional[str] = None)-> str:
     except ImportError:
         return ""
 
-def categorize_transaction(name: Optional[str], description: str, bank_name: Optional[str] = None) -> str:
+def categorize_transaction(name: Optional[str], description: str) -> str:
     
     """ Categorizes transactions based on name (first) and description (fallback). """
     name = name.lower() if name else None
@@ -152,12 +139,12 @@ def categorize_transaction(name: Optional[str], description: str, bank_name: Opt
 
     ai_enabled = ENABLE_AI_OVERRIDE if ENABLE_AI_OVERRIDE is not None else ENABLE_AI
     if ai_enabled :
-        category = categorize_transaction_with_ai(name, description, bank_name)
+        category = categorize_transaction_with_ai(name, description)
         return category
     else :
         return "Uncategorized"  # Default if no match is found
 
-def categorize_transaction_with_ai(name: Optional[str], description: str, bank_name: Optional[str] = None) -> str:
+def categorize_transaction_with_ai(name: Optional[str], description: str) -> str:
     try:
         from langchain_ollama import ChatOllama
         # Initialize the ChatOllama model
@@ -168,8 +155,7 @@ def categorize_transaction_with_ai(name: Optional[str], description: str, bank_n
             # other parameters as needed
         )
 
-        bank_context = f" This is for a {bank_name} bank statement. Bank-specific fees should be categorized as 'Bank Fees'." if bank_name else ""
-        str = f'Suggest a category for the merchant {description} I see in my payments. Categories: [Shopping, Transport, Food and groceries, Entertainment, Utilities, Salary, Bank Fees, Healthcare, Education, Investment, Travel].{bank_context}'
+        str = f'Suggest a category for the merchant {description} I see in my payments. Categories: [Shopping, Transport, Food and groceries, Entertainment, Utilities, Salary, Bank Fees, Healthcare, Education, Investment, Travel].'
         # Define the system and human messages
         messages = [
             ("system", '''You are a helpful assistant. 
@@ -203,15 +189,14 @@ class ExpenseItem:
         amount: float,
         category: Optional[str] = None,
         person_name: Optional[str] = None,
-        split_details: Optional[Dict[str, float]] = None,
-        bank_name: Optional[str] = None
+        split_details: Optional[Dict[str, float]] = None
     ):
         self.date = date
         self.time = time
         self.description = description
-        self.name = extract_name(description, bank_name)  # Extracted name from description
+        self.name = extract_name(description)  # Extracted name from description
         self.amount = amount
-        self.category = category if category else categorize_transaction(self.name, self.description, bank_name)  # Auto-categorize
+        self.category = category if category else categorize_transaction(self.name, self.description)  # Auto-categorize
         self.person = get_or_create_person(person_name) if person_name else None
         self.split_details = {}
 
