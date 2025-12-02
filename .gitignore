@@ -36,6 +36,9 @@ config/passwords.yaml
 *.csv
 *.xlsx
 
+# Database (contains sensitive financial data)
+finsight.db
+
 # Downloaded bank statements (sensitive financial data)
 statements/
 *.token.json
