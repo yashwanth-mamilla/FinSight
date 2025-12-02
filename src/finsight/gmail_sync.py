@@ -84,20 +84,50 @@ class GmailSync:
             ).execute()
 
             attachments = []
-            for part in message['payload']['parts']:
-                if 'filename' in part and part['filename']:
-                    if 'attachmentId' in part['body']:
-                        attachments.append({
-                            'filename': part['filename'],
-                            'attachment_id': part['body']['attachmentId'],
-                            'message_id': message_id,
-                            'date': message['internalDate']
-                        })
+            payload = message.get('payload', {})
+
+            # Handle messages with different structures
+            if 'parts' in payload:
+                # Multipart message
+                parts = payload['parts']
+                attachments.extend(self._extract_attachments_from_parts(parts, message_id, message['internalDate']))
+            elif 'body' in payload and 'attachmentId' in payload.get('body', {}):
+                # Single part with attachment
+                filename = payload.get('filename', '')
+                if filename:
+                    attachments.append({
+                        'filename': filename,
+                        'attachment_id': payload['body']['attachmentId'],
+                        'message_id': message_id,
+                        'date': message['internalDate']
+                    })
 
             return attachments
         except HttpError as error:
             click.echo(f'An error occurred getting message {message_id}: {error}')
             return []
+
+    def _extract_attachments_from_parts(self, parts: List[Dict], message_id: str, date: str) -> List[Dict]:
+        """Recursively extract attachments from message parts."""
+        attachments = []
+
+        for part in parts:
+            # Direct attachment
+            if 'filename' in part and part['filename']:
+                body = part.get('body', {})
+                if 'attachmentId' in body:
+                    attachments.append({
+                        'filename': part['filename'],
+                        'attachment_id': body['attachmentId'],
+                        'message_id': message_id,
+                        'date': date
+                    })
+
+            # Check nested parts
+            if 'parts' in part:
+                attachments.extend(self._extract_attachments_from_parts(part['parts'], message_id, date))
+
+        return attachments
 
     def download_attachment(self, message_id: str, attachment_id: str, filename: str) -> str:
         """Download attachment and save to local file."""
