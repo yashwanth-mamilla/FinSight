@@ -9,7 +9,7 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.errors import HttpError
 
-from .parsers import hdfc_cred_bill, amazon_pay_statement, HDFCStatementParser, SBIStatementParser
+from .parsers import hdfc_cred_bill, icici_credit_card_statement, HDFCStatementParser, SBIStatementParser
 from .utils import write_expenses_convert, analyze_spending, load_expenses_from_csv
 from .database import get_database
 
@@ -162,14 +162,13 @@ def parse(file_path, bank, output, db, password, no_ai, force_ai):
         click.echo("Parsing SBI statement...")
         parser = SBIStatementParser()
         expenses = parser.parse_file(str(file_path))
-    elif bank == "amazon-pay" and file_path.suffix.lower() == ".pdf":
-        click.echo("Parsing Amazon Pay PDF...")
+    elif bank in ["amazon-pay", "icici-cred"] and file_path.suffix.lower() == ".pdf":
         bank_name = get_bank_name(bank)
-        expenses = amazon_pay_statement(str(file_path), pdf_password, bank_name)
-    elif bank == "icici-cred" and file_path.suffix.lower() == ".pdf":
-        click.echo("Parsing ICICI Credit Card PDF...")
-        bank_name = get_bank_name(bank)
-        expenses = amazon_pay_statement(str(file_path), pdf_password, bank_name)
+        if bank == "amazon-pay":
+            click.echo("Parsing Amazon Pay PDF...")
+        else:
+            click.echo("Parsing ICICI Credit Card PDF...")
+        expenses = icici_credit_card_statement(str(file_path), pdf_password, bank_name)
     else:
         supported_list = ", ".join(supported_banks[:-1]) + ", and " + supported_banks[-1] if len(supported_banks) > 1 else supported_banks[0] if supported_banks else "none"
         click.echo(f"Unsupported bank '{bank}'. Supported: {supported_list}")
