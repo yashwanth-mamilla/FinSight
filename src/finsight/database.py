@@ -28,6 +28,7 @@ class FinSightDatabase:
                     bank_name TEXT NOT NULL,
                     date DATE NOT NULL,
                     time TIME,
+                    name TEXT,
                     description TEXT,
                     amount REAL NOT NULL,
                     category TEXT,
@@ -38,6 +39,13 @@ class FinSightDatabase:
                     UNIQUE(bank_name, reference_id) ON CONFLICT REPLACE
                 )
             ''')
+
+            # Add name column to existing tables if it doesn't exist
+            try:
+                conn.execute('ALTER TABLE transactions ADD COLUMN name TEXT')
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
 
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS accounts (
@@ -85,12 +93,13 @@ class FinSightDatabase:
                 try:
                     conn.execute('''
                         INSERT OR REPLACE INTO transactions
-                        (bank_name, date, time, description, amount, category, reference_id, import_date)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        (bank_name, date, time, name, description, amount, category, reference_id, import_date)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (
                         bank_name,
                         transaction.date.isoformat() if transaction.date else None,
                         transaction.time.isoformat() if transaction.time else None,
+                        transaction.name or '',
                         transaction.description,
                         transaction.amount,
                         getattr(transaction, 'category', None) or 'Uncategorized',
@@ -125,7 +134,7 @@ class FinSightDatabase:
         params = []
 
         query = """
-            SELECT id, bank_name, date, time, description, amount, category, balance,
+            SELECT id, bank_name, date, time, name, description, amount, category, balance,
                    reference_id, import_date
             FROM transactions
             WHERE 1=1
@@ -244,7 +253,7 @@ class FinSightDatabase:
 
         if not transactions:
             # Create empty CSV with proper headers
-            df = pd.DataFrame(columns=['id', 'bank_name', 'date', 'time', 'description',
+            df = pd.DataFrame(columns=['id', 'bank_name', 'date', 'time', 'name', 'description',
                                      'amount', 'category', 'balance', 'reference_id', 'import_date'])
         else:
             df = pd.DataFrame(transactions)
