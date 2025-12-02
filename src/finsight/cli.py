@@ -212,7 +212,8 @@ cli.add_command(db)
 @click.option('--category', default=None, help='Filter by category')
 @click.option('--limit', default=50, type=int, help='Max results to return')
 @click.option('--json', is_flag=True, help='Output as JSON')
-def db_query(bank, from_date, to_date, category, limit, json):
+@click.option('--csv', is_flag=True, help='Export to CSV file (default: db_export.csv)')
+def db_query(bank, from_date, to_date, category, limit, json, csv):
     """Query transactions from database."""
     db_instance = get_database()
 
@@ -228,7 +229,11 @@ def db_query(bank, from_date, to_date, category, limit, json):
 
     transactions = db_instance.query_transactions(filters=filters, limit=limit)
 
-    if json:
+    if csv:
+        # Export to CSV
+        exported_path = db_instance.export_to_csv('db_export.csv', filters=filters, limit=limit)
+        click.echo(f"Exported {len(transactions)} transactions to {exported_path}")
+    elif json:
         import json
         click.echo(json.dumps(transactions, indent=2, default=str))
     else:

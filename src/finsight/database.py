@@ -234,6 +234,30 @@ class FinSightDatabase:
                 'bank_filter': bank_name
             }
 
+    def export_to_csv(self, output_path: str, filters: Dict[str, Any] = None,
+                     limit: int = None) -> str:
+        """Export transactions to CSV file."""
+        import pandas as pd
+
+        # Query transactions using existing query method
+        transactions = self.query_transactions(filters=filters, limit=limit)
+
+        if not transactions:
+            # Create empty CSV with proper headers
+            df = pd.DataFrame(columns=['id', 'bank_name', 'date', 'time', 'description',
+                                     'amount', 'category', 'balance', 'reference_id', 'import_date'])
+        else:
+            df = pd.DataFrame(transactions)
+
+        # Ensure output path has .csv extension
+        if not output_path.endswith('.csv'):
+            output_path = f"{output_path}.csv"
+
+        # Export to CSV
+        df.to_csv(output_path, index=False)
+
+        return output_path
+
     def get_db_stats(self) -> Dict[str, Any]:
         """Get database statistics."""
         with self.get_connection() as conn:
