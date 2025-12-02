@@ -17,7 +17,6 @@ banks:
     # Gmail sync configuration
     gmail_account: "saiyashwanthmamilla@gmail.com"
     gmail_subjects:
-      - "subject:(HDFC Credit Card Statement)"
       - "subject:(HDFC Diners Privilege Credit Card Statement)"
     gmail_attachments:
       - "*.pdf"
@@ -35,8 +34,6 @@ banks:
     gmail_account: "saiyashwanthmamilla@gmail.com"
     gmail_subjects:
       - "subject:(HDFC Bank Statement)"
-      - "subject:(HDFC Account Statement)"
-      - "subject:(HDFC Mobile Banking Statement)"
     gmail_attachments:
       - "*.csv"
       - "*.pdf"
@@ -65,8 +62,6 @@ banks:
     gmail_account: "yashwanth.sunny8047@gmail.com"
     gmail_subjects:
       - "subject:(Amazon Pay ICICI Bank Credit Card Statement)"
-      - "subject:(Amazon Pay Retail Transactions)"
-      - "subject:(Amazon Pay Statement)"
     gmail_attachments:
       - "*.pdf"
 
