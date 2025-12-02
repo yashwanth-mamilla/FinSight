@@ -166,6 +166,10 @@ def parse(file_path, bank, output, db, password, no_ai, force_ai):
         click.echo("Parsing Amazon Pay PDF...")
         bank_name = get_bank_name(bank)
         expenses = amazon_pay_statement(str(file_path), pdf_password, bank_name)
+    elif bank == "icici-cred" and file_path.suffix.lower() == ".pdf":
+        click.echo("Parsing ICICI Credit Card PDF...")
+        bank_name = get_bank_name(bank)
+        expenses = amazon_pay_statement(str(file_path), pdf_password, bank_name)
     else:
         supported_list = ", ".join(supported_banks[:-1]) + ", and " + supported_banks[-1] if len(supported_banks) > 1 else supported_banks[0] if supported_banks else "none"
         click.echo(f"Unsupported bank '{bank}'. Supported: {supported_list}")
@@ -178,7 +182,8 @@ def parse(file_path, bank, output, db, password, no_ai, force_ai):
     # Store to database if requested
     if db:
         db_instance = get_database()
-        stored_count = db_instance.store_transactions(expenses, bank, str(file_path))
+        bank_display_name = get_bank_name(bank)
+        stored_count = db_instance.store_transactions(expenses, bank_display_name, str(file_path))
         click.echo(f"Stored {stored_count} transactions in database")
 
     # Always save to CSV as well
