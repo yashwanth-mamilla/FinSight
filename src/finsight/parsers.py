@@ -42,9 +42,11 @@ def amazon_pay_statement(pdf_path: str, password: str = None, bank_name: str = "
                     if not line:
                         continue
 
-                    # Look for lines starting with date pattern: DD/MM/YYYY
-                    # e.g., "15/10/2025 12158779277 IGST-CI@18% 0 31.59"
-                    date_match = re.match(r'^(\d{2}/\d{2}/\d{4})\s+', line)
+                    # Look for lines containing date pattern: DD/MM/YYYY
+                    # Handle various formats:
+                    # - Direct: "15/10/2025 12158779277 IGST-CI@18% 0 31.59"
+                    # - With prefix: "7% 25/10/2025 12219871867 Swiggy Limited Bangalore IN 5 591.00"
+                    date_match = re.search(r'(\d{2}/\d{2}/\d{4})', line)
                     if not date_match:
                         continue
 
@@ -53,8 +55,9 @@ def amazon_pay_statement(pdf_path: str, password: str = None, bank_name: str = "
                     if not date:
                         continue
 
-                    # Remove the date part to get remaining line
-                    remaining = line[len(date_str)+1:].strip()
+                    # Find the position of the date and take everything after it
+                    date_position = date_match.start()
+                    remaining = line[date_position + len(date_str):].strip()
 
                     # Split by spaces and dots (for decimals)
                     # Need to be careful with variable number of tokens
