@@ -137,22 +137,13 @@ def amazon_pay_statement(pdf_path: str, password: str = None, bank_name: str = "
 # Moved from a.py
 def hdfc_cred_bill(pdf_path: str, password: str = None, bank_name: str = "HDFC Credit Card") -> List[ExpenseItem]:
     transactions = []
-    print(f"DEBUG: Opening PDF {pdf_path} with password: {password}")
 
     with pdfplumber.open(pdf_path, password=password) as pdf:
-        print(f"DEBUG: PDF has {len(pdf.pages)} pages")
-
         for page_num, page in enumerate(pdf.pages):
-            print(f"DEBUG: Processing page {page_num + 1}")
             table = page.extract_table()
 
             if table:
-                print(f"DEBUG: Page {page_num + 1} has table with {len(table)} rows, {len(table[0]) if table else 0} columns")
-                print(f"DEBUG: Table[0] (header): {table[0] if table else 'No table'}")
-
                 for row_idx, row in enumerate(table[1:], 1):  # Skip header row
-                    print(f"DEBUG: Row {row_idx}: {row}")
-
                     # Handle HDFC single-column format
                     if len(row) == 1 and row[0]:
                         # Parse single column: "27/10/2025| 03:46 SWIGGYBENGALURU C 384.00 l"
@@ -160,19 +151,16 @@ def hdfc_cred_bill(pdf_path: str, password: str = None, bank_name: str = "HDFC C
 
                         # Skip if not enough content
                         if len(full_line) < 20:
-                            print(f"DEBUG: Skipping short row {row_idx}")
                             continue
 
                         # Extract date|time part - look for pattern "DD/MM/YYYY| HH:MM"
                         date_match = re.search(r'(\d{2}/\d{2}/\d{4})\|\s*(\d{2}:\d{2})', full_line)
                         if not date_match:
-                            print(f"DEBUG: No date/time found in row {row_idx}: '{full_line}'")
                             continue
 
                         date_time_str = f"{date_match.group(1)}| {date_match.group(2)}"
                         date, time = parse_datetime(date_time_str, True)
                         if date is None:
-                            print(f"DEBUG: Failed to parse date/time in row {row_idx}: '{date_time_str}'")
                             continue
 
                         # Extract description and amount - everything after the time
@@ -182,14 +170,12 @@ def hdfc_cred_bill(pdf_path: str, password: str = None, bank_name: str = "HDFC C
                         amount_match = re.search(r'\bC\s+([\d,]+\.?\d*)\s+l\b', remaining)
 
                         if not amount_match:
-                            print(f"DEBUG: No amount found in row {row_idx}: '{remaining}'")
                             continue
 
                         amount_str = amount_match.group(1)
                         try:
                             amount = float(amount_str.replace(',', ''))
                         except ValueError:
-                            print(f"DEBUG: Invalid amount in row {row_idx}: '{amount_str}'")
                             continue
 
                         # Extract description - everything before "C AMOUNT l"
@@ -198,8 +184,6 @@ def hdfc_cred_bill(pdf_path: str, password: str = None, bank_name: str = "HDFC C
 
                         # Remove reward patterns like "+ 4", "+ 60", etc.
                         description = re.sub(r'\s*\+\s+\d+', '', description_text).strip()
-
-                        print(f"DEBUG: Parsed - Date: {date}, Time: {time}, Desc: '{description}', Amount: {amount}")
 
                         # Create ExpenseItem with parsed data
                         expense = ExpenseItem(

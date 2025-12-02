@@ -210,7 +210,7 @@ cli.add_command(db)
 @click.option('--from-date', default=None, help='Start date (YYYY-MM-DD)')
 @click.option('--to-date', default=None, help='End date (YYYY-MM-DD)')
 @click.option('--category', default=None, help='Filter by category')
-@click.option('--limit', default=50, type=int, help='Max results to return')
+@click.option('--limit', default=None, type=int, help='Max results to return')
 @click.option('--json', is_flag=True, help='Output as JSON')
 @click.option('--csv', is_flag=True, help='Export to CSV file (default: db_export.csv)')
 def db_query(bank, from_date, to_date, category, limit, json, csv):

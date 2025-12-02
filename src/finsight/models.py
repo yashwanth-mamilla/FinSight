@@ -119,10 +119,10 @@ def extract_name_ai(description: str, bank_name: Optional[str] = None)-> str:
         ]
 
 
-        # Invoke the mod21``1234]el with structured output
+        # Invoke the model with structured output
         response = llm.invoke(messages, format=TransactionCategory.model_json_schema())
 
-        print(response.content)
+        # print(response.content)  # Debug output disabled
         # Parse the response to extract the category
         try:
             response_data = TransactionCategory.model_validate_json(response.content)
@@ -183,7 +183,7 @@ def categorize_transaction_with_ai(name: Optional[str], description: str, bank_n
         # Invoke the model with structured output
         response = llm.invoke(messages, format=TransactionCategory.model_json_schema())
 
-        print(response.content)
+        # print(response.content)  # Debug output disabled
         # Parse the response to extract the category
         try:
             response_data = TransactionCategory.model_validate_json(response.content)
@@ -207,7 +207,14 @@ class ExpenseItem:
         bank_name: Optional[str] = None
     ):
         self.date = date
-        self.time = time
+        # Convert string time to datetime.time if it's a string in HH:MM:SS format
+        if isinstance(time, str) and time:
+            try:
+                self.time = datetime.strptime(time, '%H:%M:%S').time()
+            except ValueError:
+                self.time = None
+        else:
+            self.time = time
         self.description = description
         self.name = extract_name(description, bank_name)  # Extracted name from description
         self.amount = amount
