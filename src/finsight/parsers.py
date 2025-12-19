@@ -6,8 +6,8 @@ from typing import List, Optional, Dict
 import pdfplumber
 from .models import ExpenseItem, clean_amount, parse_datetime
 
-# Amazon Pay PDF Parser
-def amazon_pay_statement(pdf_path: str, password: str = None, bank_name: str = "Amazon Pay") -> List[ExpenseItem]:
+# ICICI Credit Card PDF Parser (works for both ICICI and Amazon Pay ICICI statements)
+def icici_credit_card_statement(pdf_path: str, password: str = None, bank_name: str = "ICICI Credit Card") -> List[ExpenseItem]:
     """Parse Amazon Pay statement PDF using text-based transaction extraction."""
     transactions = []
     import re
@@ -129,7 +129,7 @@ def amazon_pay_statement(pdf_path: str, password: str = None, bank_name: str = "
                     transactions.append(expense)
 
     except Exception as e:
-        print(f"Amazon Pay parsing error: {e}")
+        print(f"ICICI Credit Card parsing error: {e}")
         return []
 
     return transactions
