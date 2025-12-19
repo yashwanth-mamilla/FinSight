@@ -65,6 +65,23 @@ banks:
     gmail_attachments:
       - "*.pdf"
 
+  icici_credit:
+    name: "ICICI Credit Card"
+    cli_identifier: "icici-cred"
+    formats: ["pdf"]
+    parser_class: "ICICICreditCardParser"
+    password_identifiers:
+      - "icici_cred"
+      - "icici_card"
+      - "icici"
+    description: "Official ICICI credit card statement PDFs"
+    # Gmail sync configuration
+    gmail_account: "saiyashwanthmamilla@gmail.com"
+    gmail_subjects:
+      - "subject:(ICICI Bank Credit Card Statement)"
+    gmail_attachments:
+      - "*.pdf"
+
 # Password matching rules
 # The system tries passwords in this order:
 # 1. Exact filename match: Use PDF filename as key in passwords.yaml
@@ -78,3 +95,4 @@ supported_bank_identifiers:
   - "hdfc-bank"
   - "sbi"
   - "amazon-pay"
+  - "icici-cred"
